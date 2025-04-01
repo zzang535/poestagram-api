@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+from app.db.base import get_db
 from app.schemas.email import EmailVerificationRequest, EmailVerificationResponse
-from app.core.email import generate_verification_code, send_verification_email
+from app.services.email import generate_verification_code, send_verification_email
 from app.core.database import get_db
 from datetime import datetime
 from pydantic import BaseModel

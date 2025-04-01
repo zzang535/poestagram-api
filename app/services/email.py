@@ -21,8 +21,8 @@ def send_verification_email(email: str, verification_code: str, db: Session):
         # 새로운 인증 정보 저장
         verify = Verify(
             email=email,
-            verification_code=verification_code,
-            expires_at=datetime.utcnow() + timedelta(minutes=5)
+            code=verification_code,
+            is_verified=False
         )
         db.add(verify)
         db.commit()
