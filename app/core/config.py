@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Poe2stagram API"
@@ -13,8 +17,13 @@ class Settings(BaseSettings):
     DB_HOST: str
     
     # Email settings
-    EMAIL_USER: str
-    EMAIL_PASSWORD: str
+    EMAIL_USER: str = os.getenv("EMAIL_USER", "")
+    EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
+    
+    # JWT settings
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key")
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7일
     
     @property
     def DATABASE_URL(self) -> str:

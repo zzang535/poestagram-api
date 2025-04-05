@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import email, privacy, test
+from app.api import auth, privacy, test
 
 app = FastAPI(
     title="Poestagram API",
@@ -18,7 +18,7 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(email.router, prefix="/api", tags=["email"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(privacy.router, prefix="/api", tags=["privacy"])
 app.include_router(test.router, prefix="/api", tags=["test"])
 
