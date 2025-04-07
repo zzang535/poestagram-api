@@ -23,8 +23,6 @@ class SignUpRequest(BaseModel):
 class SignUpResponse(BaseModel):
     message: str
     user_id: int
-    access_token: str
-    token_type: str
 
 class EmailCheckRequest(BaseModel):
     email: EmailStr

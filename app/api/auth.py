@@ -113,17 +113,10 @@ async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
             privacy_policy=request.privacy_policy
         )
         
-        # JWT 토큰 생성
-        access_token = create_access_token(
-            data={"sub": user.email, "user_id": user.id}
-        )
-        
         logger.info(f"회원가입 성공: {user.id}")
         return SignUpResponse(
             message="회원가입이 완료되었습니다.",
-            user_id=user.id,
-            access_token=access_token,
-            token_type="bearer"
+            user_id=user.id
         )
     except HTTPException as e:
         raise e
