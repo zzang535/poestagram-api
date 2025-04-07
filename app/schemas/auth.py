@@ -26,4 +26,22 @@ class SignUpResponse(BaseModel):
     access_token: str
     token_type: str
 
+class EmailCheckRequest(BaseModel):
+    email: EmailStr
+
+class EmailCheckResponse(BaseModel):
+    exists: bool
+    message: str
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+
+class LoginResponse(BaseModel):
+    message: str
+    user_id: int
+    email: str
+    nickname: str
+    access_token: str
+    token_type: str
+
 # ... 나머지 코드 ... 
