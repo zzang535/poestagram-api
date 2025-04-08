@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, privacy, test
+from app.api import auth, privacy, test, file
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Poestagram API",
@@ -21,6 +26,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(privacy.router, prefix="/api", tags=["privacy"])
 app.include_router(test.router, prefix="/api", tags=["test"])
+app.include_router(file.router, prefix="/api/files", tags=["files"])
 
 @app.get("/")
 async def root():

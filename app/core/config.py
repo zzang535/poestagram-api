@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     DB_DATABASE: str
     DB_HOST: str
+    DB_PORT: str
+    DB_USER: str
     
     # Email settings
     EMAIL_USER: str = os.getenv("EMAIL_USER", "")
@@ -24,6 +26,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7일
+    
+    # AWS settings
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str
+    AWS_BUCKET_NAME: str
     
     @property
     def DATABASE_URL(self) -> str:
