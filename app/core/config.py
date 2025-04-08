@@ -6,7 +6,7 @@ import os
 load_dotenv()
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Poe2stagram API"
+    PROJECT_NAME: str = "Poestagram API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
@@ -15,8 +15,6 @@ class Settings(BaseSettings):
     DB_PASSWORD: str
     DB_DATABASE: str
     DB_HOST: str
-    DB_PORT: str
-    DB_USER: str
     
     # Email settings
     EMAIL_USER: str = os.getenv("EMAIL_USER", "")
