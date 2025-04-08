@@ -1,5 +1,27 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from datetime import datetime
+
+class FileBase(BaseModel):
+    file_name: str
+    base_url: str
+    s3_key: str
+    file_type: str
+    file_size: int
+
+class FileCreate(FileBase):
+    pass
+
+class FileInDB(FileBase):
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class File(FileInDB):
+    pass
 
 class FileUploadResponse(BaseModel):
     message: str

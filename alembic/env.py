@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.db.base import Base
 # 모든 모델 임포트
-from app.models import privacy, user, verify  # 모든 모델 파일 임포트
+from app.models import privacy, user, verify, file  # 모든 모델 파일 임포트
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
