@@ -25,4 +25,5 @@ class File(FileInDB):
 
 class FileUploadResponse(BaseModel):
     message: str
-    file_urls: List[str] 
+    file_urls: List[str]
+    uploaded_files: List[File] 
