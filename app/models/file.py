@@ -12,7 +12,7 @@ class File(Base):
     s3_key = Column(String(255), nullable=False)
     file_type = Column(String(100), nullable=False)
     file_size = Column(Integer, nullable=False)
-    feed_id = Column(Integer, ForeignKey('feeds.id', ondelete='CASCADE'), nullable=False)
+    feed_id = Column(Integer, ForeignKey('feeds.id', ondelete='CASCADE'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
