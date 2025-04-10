@@ -170,7 +170,7 @@ def create_access_token(data: dict) -> str:
 
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user_id(token: str = Depends(oauth2_scheme)):
     user_id = decode_access_token(token)
     return user_id  # 또는 User 객체로 조회해서 반환해도 됨
 
