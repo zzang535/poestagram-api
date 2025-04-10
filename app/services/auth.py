@@ -11,6 +11,11 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 import logging
 import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jwt import ExpiredSignatureError, InvalidTokenError  # PyJWT 전용 예외
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # tokenUrl은 사용 안 해도 됨
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -162,3 +167,26 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt 
+
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    user_id = decode_access_token(token)
+    return user_id  # 또는 User 객체로 조회해서 반환해도 됨
+
+
+def decode_access_token(token: str):
+    try:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
+        )
+        user_id = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+        return user_id
+    except ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
