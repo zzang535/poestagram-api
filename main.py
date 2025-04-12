@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, privacy, test, file, feed
+from app.api import auth, privacy, test, file, feed, users
 import logging
 
 # 로깅 설정
@@ -23,11 +23,13 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(auth.router, prefix="/api", tags=["auth"])
-app.include_router(privacy.router, prefix="/api", tags=["privacy"])
-app.include_router(test.router, prefix="/api", tags=["test"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(privacy.router, prefix="/api/privacy", tags=["privacy"])
+app.include_router(test.router, prefix="/api/test", tags=["test"])
 app.include_router(file.router, prefix="/api/files", tags=["files"])
 app.include_router(feed.router, prefix="/api/feeds", tags=["feeds"])
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to Poestagram API"}
