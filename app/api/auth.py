@@ -20,7 +20,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter()
 
 @router.post("/check-email", response_model=EmailCheckResponse)
 async def check_email(request: EmailCheckRequest, db: Session = Depends(get_db)):

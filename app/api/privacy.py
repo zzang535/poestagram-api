@@ -7,7 +7,7 @@ from app.db.base import get_db
 from app.crud import privacy as privacy_crud
 from app.schemas.privacy import Privacy, PrivacyCreate, PrivacyUpdate
 
-router = APIRouter(prefix="/privacy", tags=["privacy"])
+router = APIRouter()
 
 @router.get("/", response_model=Privacy)
 def get_latest_privacy(db: Session = Depends(get_db)):
