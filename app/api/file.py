@@ -58,6 +58,9 @@ async def upload_files(
     try:
         logger.info(f"파일 업로드 요청: {len(files)}개 파일")
 
+        # 파일 메타데이터를 저장할 리스트
+        file_metadata_list = []
+
         for file in files:
             # 파일 메타데이터 출력
             logger.info(f"파일 메타데이터: {file.filename}")
@@ -71,23 +74,32 @@ async def upload_files(
                 if width and height:
                     logger.info(f"- 이미지 크기: {width}x{height} pixels")
 
+            # 메타데이터 저장
+            file_metadata_list.append({
+                'filename': file.filename,
+                'content_type': file.content_type,
+                'size': file.size,
+                'width': width,
+                'height': height
+            })
+
         # 파일 업로드
         file_urls = await upload_files_to_s3(files)
         
         # 파일 정보를 DB에 저장
         uploaded_files = []
-        for file, file_url in zip(files, file_urls):
+        for file_url, metadata in zip(file_urls, file_metadata_list):
             # URL을 base_url과 s3_key로 분리
             base_url, s3_key = split_file_url(file_url)
 
             file_info = FileModel(
-                file_name=file.filename,
+                file_name=metadata['filename'],
                 base_url=base_url,
                 s3_key=s3_key,
-                content_type=file.content_type,
-                file_size=file.size,
-                width=width,
-                height=height
+                content_type=metadata['content_type'],
+                file_size=metadata['size'],
+                width=metadata['width'],
+                height=metadata['height']
             )
             db.add(file_info)
             db.flush()  # ID를 즉시 생성하기 위해 flush
