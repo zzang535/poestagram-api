@@ -6,8 +6,10 @@ class FileBase(BaseModel):
     file_name: str
     base_url: str
     s3_key: str
-    file_type: str
+    content_type: str
     file_size: int
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 class FileCreate(FileBase):
     pass
