@@ -50,6 +50,7 @@ def create_feed_endpoint(
     new_feed = Feed(
         description=feed_data.description,
         user_id=current_user_id,
+        frame_ratio=feed_data.frame_ratio
     )
 
     db.add(new_feed)
