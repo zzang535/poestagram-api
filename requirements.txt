@@ -26,3 +26,4 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.9
 boto3==1.34.34
 Pillow==10.2.0
+moviepy==1.0.3

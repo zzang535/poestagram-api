@@ -10,6 +10,9 @@ import logging
 import re
 from PIL import Image
 import io
+from moviepy.editor import VideoFileClip
+import tempfile
+import os
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +50,33 @@ async def get_image_dimensions(file: UploadFile) -> tuple:
         # 파일 포인터를 처음 위치로 되돌림
         await file.seek(0)
 
+async def get_video_dimensions(file: UploadFile) -> tuple:
+    """
+    비디오 파일의 크기 정보를 반환합니다.
+    """
+    try:
+        # 임시 파일 생성
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+            # 파일 내용을 임시 파일에 저장
+            contents = await file.read()
+            temp_file.write(contents)
+            temp_file.flush()
+            
+            # 비디오 파일 로드
+            video = VideoFileClip(temp_file.name)
+            width, height = video.size
+            
+            # 임시 파일 삭제
+            os.unlink(temp_file.name)
+            
+            return width, height
+    except Exception as e:
+        logger.warning(f"비디오 크기 확인 중 오류 발생: {str(e)}")
+        return None, None
+    finally:
+        # 파일 포인터를 처음 위치로 되돌림
+        await file.seek(0)
+
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_files(
     files: List[UploadFile] = FastAPIFile(...),
@@ -67,12 +97,16 @@ async def upload_files(
             logger.info(f"- Content-Type: {file.content_type}")
             logger.info(f"- 파일 크기: {file.size} bytes")
             
-            # 이미지 파일인 경우 크기 정보 확인
+            # 이미지 또는 비디오 파일인 경우 크기 정보 확인
             width, height = None, None
-            if file.content_type and file.content_type.startswith('image/'):
-                width, height = await get_image_dimensions(file)
+            if file.content_type:
+                if file.content_type.startswith('image/'):
+                    width, height = await get_image_dimensions(file)
+                elif file.content_type.startswith('video/'):
+                    width, height = await get_video_dimensions(file)
+                
                 if width and height:
-                    logger.info(f"- 이미지 크기: {width}x{height} pixels")
+                    logger.info(f"- 미디어 크기: {width}x{height} pixels")
 
             # 메타데이터 저장
             file_metadata_list.append({
