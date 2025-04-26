@@ -27,7 +27,19 @@ jobs:
 
     - name: Package application
       run: |
-         tar --exclude=".github" -czvf app.tar.gz .
+         tar --exclude=".git" \
+          --exclude=".github" \
+          --exclude="__pycache__" \
+          --exclude="*.pyc" \
+          --exclude="venv" \
+          --exclude=".gitignore" \
+          --exclude=".python-version" \
+          --exclude=".cursorrules" \
+          --exclude="README.md" \
+          --exclude="app/__pycache__" \
+          --exclude="src/__pycache__" \
+          -czvf app.tar.gz \
+          main.py app/ requirements.txt alembic/ alembic.ini
 
     - name: Copy package to EC2
       uses: appleboy/scp-action@v0.1.7
