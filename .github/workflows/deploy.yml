@@ -27,7 +27,7 @@ jobs:
 
     - name: Package application
       run: |
-        tar -czvf app.tar.gz .
+         tar --warning=no-file-changed -czvf app.tar.gz .
 
     - name: Copy package to EC2
       uses: appleboy/scp-action@v0.1.7
