@@ -6,6 +6,7 @@ class FileBase(BaseModel):
     file_name: str
     base_url: str
     s3_key: str
+    s3_key_thumbnail: Optional[str] = None
     content_type: str
     file_size: int
     width: Optional[int] = None

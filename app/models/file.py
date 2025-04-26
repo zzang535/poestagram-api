@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
+from datetime import datetime
 
 class File(Base):
     __tablename__ = "files"
@@ -10,6 +11,7 @@ class File(Base):
     file_name = Column(String(255), nullable=False)
     base_url = Column(String(255), nullable=False)
     s3_key = Column(String(255), nullable=False)
+    s3_key_thumbnail = Column(String(255), nullable=True)  # 썸네일 S3 키 추가
     content_type = Column(String(100), nullable=False)
     file_size = Column(Integer, nullable=False)
     width = Column(Integer, nullable=True)  # 이미지 너비

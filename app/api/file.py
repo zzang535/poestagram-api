@@ -2,80 +2,18 @@ from fastapi import APIRouter, File as FastAPIFile, UploadFile, HTTPException
 from typing import List
 from app.schemas.file import FileUploadResponse, File
 from app.services.s3 import upload_files_to_s3
+from app.services.media import split_file_url, get_image_dimensions, get_video_dimensions, extract_video_thumbnail
 from app.models.file import File as FileModel
 from app.db.base import get_db
 from sqlalchemy.orm import Session
 from fastapi import Depends
 import logging
-import re
-from PIL import Image
-import io
-from moviepy.editor import VideoFileClip
-import tempfile
-import os
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# URL 분리 함수
-def split_file_url(file_url):
-    """
-    파일 URL을 base_url과 s3_key로 분리합니다.
-    """
-    pattern = r'(https?://[^/]+)/(.+)'
-    match = re.match(pattern, file_url)
-    if match:
-        base_url = match.group(1)
-        s3_key = match.group(2)
-        return base_url, s3_key
-    return file_url, ""  # 분리 실패 시 기본값
-
-async def get_image_dimensions(file: UploadFile) -> tuple:
-    """
-    이미지 파일의 크기 정보를 반환합니다.
-    """
-    try:
-        # 파일 내용을 메모리에 로드
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
-        width, height = image.size
-        return width, height
-    except Exception as e:
-        logger.warning(f"이미지 크기 확인 중 오류 발생: {str(e)}")
-        return None, None
-    finally:
-        # 파일 포인터를 처음 위치로 되돌림
-        await file.seek(0)
-
-async def get_video_dimensions(file: UploadFile) -> tuple:
-    """
-    비디오 파일의 크기 정보를 반환합니다.
-    """
-    try:
-        # 임시 파일 생성
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-            # 파일 내용을 임시 파일에 저장
-            contents = await file.read()
-            temp_file.write(contents)
-            temp_file.flush()
-            
-            # 비디오 파일 로드
-            video = VideoFileClip(temp_file.name)
-            width, height = video.size
-            
-            # 임시 파일 삭제
-            os.unlink(temp_file.name)
-            
-            return width, height
-    except Exception as e:
-        logger.warning(f"비디오 크기 확인 중 오류 발생: {str(e)}")
-        return None, None
-    finally:
-        # 파일 포인터를 처음 위치로 되돌림
-        await file.seek(0)
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_files(
@@ -99,11 +37,23 @@ async def upload_files(
             
             # 이미지 또는 비디오 파일인 경우 크기 정보 확인
             width, height = None, None
+            s3_key_thumbnail = None
+            
             if file.content_type:
                 if file.content_type.startswith('image/'):
                     width, height = await get_image_dimensions(file)
                 elif file.content_type.startswith('video/'):
                     width, height = await get_video_dimensions(file)
+                    # 비디오 썸네일 추출 및 업로드
+                    thumbnail = await extract_video_thumbnail(file)
+                    if thumbnail:
+                        try:
+                            thumbnail_urls = await upload_files_to_s3([thumbnail])
+                            if thumbnail_urls:
+                                _, s3_key_thumbnail = split_file_url(thumbnail_urls[0])
+                            await thumbnail.close()
+                        except Exception as e:
+                            logger.error(f"썸네일 업로드 중 오류 발생: {str(e)}")
                 
                 if width and height:
                     logger.info(f"- 미디어 크기: {width}x{height} pixels")
@@ -114,10 +64,11 @@ async def upload_files(
                 'content_type': file.content_type,
                 'size': file.size,
                 'width': width,
-                'height': height
+                'height': height,
+                's3_key_thumbnail': s3_key_thumbnail
             })
 
-        # 파일 업로드
+        # 원본 파일 업로드
         file_urls = await upload_files_to_s3(files)
         
         # 파일 정보를 DB에 저장
@@ -130,6 +81,7 @@ async def upload_files(
                 file_name=metadata['filename'],
                 base_url=base_url,
                 s3_key=s3_key,
+                s3_key_thumbnail=metadata['s3_key_thumbnail'],
                 content_type=metadata['content_type'],
                 file_size=metadata['size'],
                 width=metadata['width'],
