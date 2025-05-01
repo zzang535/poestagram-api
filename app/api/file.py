@@ -2,7 +2,7 @@ from fastapi import APIRouter, File as FastAPIFile, UploadFile, HTTPException
 from typing import List
 from app.schemas.file import FileUploadResponse, File
 from app.services.s3 import upload_files_to_s3
-from app.services.media import split_file_url, get_image_dimensions, get_video_dimensions, extract_video_thumbnail
+from app.services.media import split_file_url, get_image_dimensions, get_video_dimensions, extract_video_thumbnail, get_video_rotation
 from app.models.file import File as FileModel
 from app.db.base import get_db
 from sqlalchemy.orm import Session
@@ -43,7 +43,22 @@ async def upload_files(
                 if file.content_type.startswith('image/'):
                     width, height = await get_image_dimensions(file)
                 elif file.content_type.startswith('video/'):
+                    # 1. 너비, 높이 가져오기
                     width, height = await get_video_dimensions(file)
+                    # 2. 회전 정보 가져오기
+                    rotation = await get_video_rotation(file)
+
+                    # 3. 회전 정보에 따라 최종 width, height 결정
+                    if width is not None and height is not None:
+                        logger.info(f"원본 비디오 크기: {width}x{height}, 회전: {rotation}도")
+                        if rotation in (90, 270): # 세로 영상
+                            logger.info(f"세로 영상 감지. width와 height를 교환합니다.")
+                            width, height = height, width
+                        else:
+                             logger.info(f"가로 영상 또는 회전 정보 없음.")
+                    else:
+                         logger.warning(f"비디오 크기 정보를 가져올 수 없습니다: {file.filename}")
+
                     # 비디오 썸네일 추출 및 업로드
                     thumbnail = await extract_video_thumbnail(file)
                     if thumbnail:
