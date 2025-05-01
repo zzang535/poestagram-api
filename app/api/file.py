@@ -59,10 +59,13 @@ async def upload_files(
                     else:
                          logger.warning(f"비디오 크기 정보를 가져올 수 없습니다: {file.filename}")
 
-                    # 비디오 썸네일 추출 및 업로드
-                    thumbnail = await extract_video_thumbnail(file)
+                    # 비디오 썸네일 추출 및 업로드 (최종 width, height 전달)
+                    thumbnail = await extract_video_thumbnail(file, target_width=width, target_height=height)
                     if thumbnail:
                         try:
+                            # 썸네일 업로드 전 원본 파일 포인터 복구 (필요 시)
+                            await file.seek(0) # extract_video_thumbnail 내부에서 읽었으므로 필요
+                            
                             thumbnail_urls = await upload_files_to_s3([thumbnail])
                             if thumbnail_urls:
                                 _, s3_key_thumbnail = split_file_url(thumbnail_urls[0])
