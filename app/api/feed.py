@@ -6,8 +6,10 @@ from datetime import datetime
 
 from app.db.base import get_db
 from app.models.feed import Feed
-from app.models.user import User
-from app.models.file import File
+from app.models.file import File as FileModel
+from app.models.user import User as UserModel
+from app.schemas.file import File as FileSchema
+from app.schemas.user import User as UserSchema
 from app.models.feed_like import FeedLike
 from app.schemas.feed import (
     FeedCreate,
@@ -31,8 +33,6 @@ def get_all_feeds(
     사용자 인증 시 좋아요 정보 포함.
     """
     print(f"current_user_id: {current_user_id}")
-    # 전체 피드 개수 계산
-    total_feeds = db.query(Feed).count()
 
     response_feeds = []
 
@@ -52,35 +52,48 @@ def get_all_feeds(
             )
             # JOIN된 Like의 feed_id가 NULL이 아닌지 여부로 is_liked 컬럼 추가
             .add_columns(Like.feed_id.isnot(None).label("is_liked"))
-            .options(joinedload(Feed.files))
+            # user 및 files 정보 함께 로드
+            .options(joinedload(Feed.user), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
 
-        feeds_with_like_status = query.all()
-
         # 결과 처리
-        for feed, is_liked in feeds_with_like_status:
-            feed_data = FeedResponse.from_orm(feed).model_dump()
-            response_feeds.append(FeedResponseWithLike(**feed_data, is_liked=bool(is_liked)))
+        for feed, is_liked in query.all():
+
+            files = [FileSchema.model_validate(f) for f in feed.files]
+            user = UserSchema.model_validate(feed.user)
+
+            dump = FeedResponse(
+                id=feed.id,
+                description=feed.description,
+                frame_ratio=feed.frame_ratio,
+                created_at=feed.created_at,
+                updated_at=feed.updated_at,
+                files=files,
+                user=user 
+            ).model_dump()
+
+            response_feeds.append(FeedResponseWithLike(**dump, is_liked=bool(is_liked)))
 
     else:
         # 사용자가 로그인하지 않은 경우: 좋아요 정보 없이 조회 (is_liked=False)
         feeds = (
             db.query(Feed)
-            .options(joinedload(Feed.files))
+            # user 및 files 정보 함께 로드
+            .options(joinedload(Feed.user), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
         )
         for feed in feeds:
-            feed_data = FeedResponse.from_orm(feed).model_dump()
-            response_feeds.append(FeedResponseWithLike(**feed_data, is_liked=False))
+            dump = FeedResponse.model_validate(feed).model_dump()
+            response_feeds.append(FeedResponseWithLike(**dump, is_liked=False))
 
     # 응답 반환
-    return FeedListResponseWithLike(feeds=response_feeds, total=total_feeds)
+    return FeedListResponseWithLike(feeds=response_feeds)
 
 @router.post("/", response_model=FeedResponse, status_code=201)
 def create_feed_endpoint(

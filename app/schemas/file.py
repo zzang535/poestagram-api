@@ -20,8 +20,10 @@ class FileInDB(FileBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    # Pydantic v2용 설정
+    model_config = {
+        "from_attributes": True
+    }
 
 class File(FileInDB):
     pass
