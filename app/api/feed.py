@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, aliased
+from sqlalchemy import exists, select, case
 from typing import List, Optional
 from datetime import datetime
 
@@ -7,39 +8,83 @@ from app.db.base import get_db
 from app.models.feed import Feed
 from app.models.user import User
 from app.models.file import File
-from app.schemas.feed import FeedCreate, FeedResponse, FeedListResponse
-from app.services.auth import get_current_user_id
+from app.models.feed_like import FeedLike
+from app.schemas.feed import (
+    FeedCreate,
+    FeedResponse,
+    FeedResponseWithLike,
+    FeedListResponseWithLike
+)
+from app.services.auth import get_current_user_id, get_optional_current_user_id
 
 router = APIRouter()
 
-@router.get("/", response_model=FeedListResponse)
+@router.get("/", response_model=FeedListResponseWithLike)
 def get_all_feeds(
     offset: int = 0,
     limit: int = 20,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user_id: Optional[int] = Depends(get_optional_current_user_id)
 ):
     """
-    모든 피드를 파일 포함하여 가져오는 API
+    모든 피드를 파일 포함하여 가져오는 API.
+    사용자 인증 시 좋아요 정보 포함.
     """
+    print(f"current_user_id: {current_user_id}")
     # 전체 피드 개수 계산
     total_feeds = db.query(Feed).count()
-    
-    # 피드 목록과 연결된 파일 정보 함께 가져오기 (생성 날짜 내림차순으로 정렬)
-    feeds = (
-        db.query(Feed)
-        .options(joinedload(Feed.files))  # 피드와 연결된 파일 정보를 한 번에 가져옴
-        .order_by(Feed.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    
+
+    response_feeds = []
+
+    if current_user_id is not None:
+
+        print(f"current_user_id is not None: {current_user_id}") # 디버깅 로그 (추후 제거 가능)
+
+        # FeedLike 테이블에 대한 별칭(alias) 생성
+        Like = aliased(FeedLike)
+
+        # JOIN을 먼저 정의하고 add_columns 사용
+        query = (
+            db.query(Feed)
+            .outerjoin(
+                Like,
+                (Feed.id == Like.feed_id) & (Like.user_id == current_user_id)
+            )
+            # JOIN된 Like의 feed_id가 NULL이 아닌지 여부로 is_liked 컬럼 추가
+            .add_columns(Like.feed_id.isnot(None).label("is_liked"))
+            .options(joinedload(Feed.files))
+            .order_by(Feed.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        feeds_with_like_status = query.all()
+
+        # 결과 처리
+        for feed, is_liked in feeds_with_like_status:
+            feed_data = FeedResponse.from_orm(feed).model_dump()
+            response_feeds.append(FeedResponseWithLike(**feed_data, is_liked=bool(is_liked)))
+
+    else:
+        # 사용자가 로그인하지 않은 경우: 좋아요 정보 없이 조회 (is_liked=False)
+        feeds = (
+            db.query(Feed)
+            .options(joinedload(Feed.files))
+            .order_by(Feed.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+        for feed in feeds:
+            feed_data = FeedResponse.from_orm(feed).model_dump()
+            response_feeds.append(FeedResponseWithLike(**feed_data, is_liked=False))
+
     # 응답 반환
-    return FeedListResponse(feeds=feeds, total=total_feeds)
+    return FeedListResponseWithLike(feeds=response_feeds, total=total_feeds)
 
 @router.post("/", response_model=FeedResponse, status_code=201)
 def create_feed_endpoint(
-    feed_data: FeedCreate, 
+    feed_data: FeedCreate,
     db: Session = Depends(get_db),
     current_user_id: int = Depends(get_current_user_id)
 ):
@@ -65,3 +110,76 @@ def create_feed_endpoint(
         db.commit()
     
     return FeedResponse.from_orm(new_feed)
+
+@router.post("/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
+def like_feed(
+    feed_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    특정 피드에 좋아요를 추가합니다.
+
+    - 사용자가 이미 해당 피드에 좋아요를 눌렀다면 아무 작업도 하지 않고 성공 응답을 반환합니다.
+    - 피드가 존재하지 않으면 404 오류를 반환합니다.
+    """
+    # 1. 피드 존재 확인
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
+
+    # 2. 이미 좋아요를 눌렀는지 확인
+    existing_like = db.query(FeedLike).filter(
+        FeedLike.user_id == current_user_id,
+        FeedLike.feed_id == feed_id
+    ).first()
+
+    if existing_like:
+        return {"message": "이미 좋아요를 누른 피드입니다."}
+
+    # 3. 좋아요 정보 생성 및 저장
+    new_like = FeedLike(user_id=current_user_id, feed_id=feed_id)
+    try:
+        db.add(new_like)
+        db.commit()
+        return {"message": "피드에 좋아요를 추가했습니다."}
+    except Exception as e:
+        db.rollback()
+        # IntegrityError (e.g., user or feed deleted concurrently) or other DB errors
+        raise HTTPException(status_code=500, detail=f"좋아요 추가 중 오류 발생: {str(e)}")
+
+
+@router.delete("/{feed_id}/like", status_code=200, summary="피드 좋아요 취소")
+def unlike_feed(
+    feed_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    특정 피드에 대한 좋아요를 취소합니다.
+
+    - 사용자가 해당 피드에 좋아요를 누르지 않았다면 아무 작업도 하지 않고 성공 응답을 반환합니다.
+    - 피드가 존재하지 않으면 404 오류를 반환합니다.
+    """
+    # 1. 피드 존재 확인 (선택적이지만, 좋아요 레코드 검색 전에 하는 것이 좋음)
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
+
+    # 2. 좋아요 기록 찾기
+    like_to_delete = db.query(FeedLike).filter(
+        FeedLike.user_id == current_user_id,
+        FeedLike.feed_id == feed_id
+    ).first()
+
+    if not like_to_delete:
+        return {"message": "좋아요를 누르지 않은 피드입니다."}
+
+    # 3. 좋아요 기록 삭제
+    try:
+        db.delete(like_to_delete)
+        db.commit()
+        return {"message": "피드 좋아요를 취소했습니다."}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"좋아요 취소 중 오류 발생: {str(e)}")

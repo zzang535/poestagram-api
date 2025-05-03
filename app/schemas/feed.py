@@ -20,6 +20,13 @@ class FeedResponse(FeedBase):
     class Config:
         from_attributes = True
 
+class FeedResponseWithLike(FeedResponse):
+    is_liked: bool
+
 class FeedListResponse(BaseModel):
     feeds: List[FeedResponse]
+    total: int
+
+class FeedListResponseWithLike(BaseModel):
+    feeds: List[FeedResponseWithLike]
     total: int

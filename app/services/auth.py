@@ -4,6 +4,7 @@ from email.mime.multipart import MIMEMultipart
 import random
 import string
 from datetime import datetime, timedelta
+from typing import Optional
 from app.core.config import settings
 from app.models.verify import Verify
 from app.models.user import User
@@ -15,7 +16,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import ExpiredSignatureError, InvalidTokenError  # PyJWT 전용 예외
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")  # tokenUrl은 사용 안 해도 됨
+# 기존 oauth2_scheme (인증 필수 API 용)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token") # 실제 tokenUrl 확인
+
+# 새로운 oauth2_scheme_optional (선택적 인증 API 용)
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False) # auto_error=False
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -163,30 +168,66 @@ def create_access_token(data: dict) -> str:
     JWT 액세스 토큰 생성
     """
     to_encode = data.copy()
+    # datetime.utcnow() 대신 timezone-aware datetime 사용 권장 (예: datetime.now(timezone.utc))
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-    return encoded_jwt 
-
-
-
-def get_current_user_id(token: str = Depends(oauth2_scheme)):
-    user_id = decode_access_token(token)
-    return user_id  # 또는 User 객체로 조회해서 반환해도 됨
-
+    return encoded_jwt
 
 def decode_access_token(token: str):
+    """ 토큰 디코딩 및 user_id 반환, 실패 시 HTTPException 발생 """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
+            settings.JWT_SECRET_KEY, # 실제 설정 값 사용
+            algorithms=[settings.JWT_ALGORITHM] # 실제 설정 값 사용
         )
-        user_id = payload.get("user_id")
+        user_id: Optional[str] = payload.get("user_id")
         if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        return user_id
+            logger.warning("Token payload does not contain user_id")
+            raise credentials_exception
+        # user_id 가 int 형태인지 확인 (선택적이지만 권장)
+        try:
+            return int(user_id)
+        except ValueError:
+            logger.warning(f"user_id in token is not an integer: {user_id}")
+            raise credentials_exception
+
     except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        logger.info("Token has expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except InvalidTokenError as e:
+        logger.warning(f"Invalid token: {e}")
+        raise credentials_exception
+    except Exception as e: # 예상치 못한 다른 오류 처리
+        logger.error(f"Error decoding token: {e}")
+        raise credentials_exception
+
+def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
+    """ 현재 사용자 ID 반환 (인증 필수) """
+    user_id = decode_access_token(token)
+    return user_id
+
+def get_optional_current_user_id(token: Optional[str] = Depends(oauth2_scheme_optional)) -> Optional[int]:
+    """ 현재 사용자 ID 반환 (선택적 인증), 실패 시 None 반환 """
+    if token is None:
+        return None
+    try:
+        user_id = decode_access_token(token)
+        return user_id
+    except HTTPException:
+        # decode_access_token에서 발생하는 모든 HTTPException (401 등)을 잡아서 None 반환
+        return None
+    except Exception as e:
+        # 예상치 못한 다른 오류 로깅 (선택적)
+        logger.error(f"Unexpected error in get_optional_current_user_id: {e}")
+        return None

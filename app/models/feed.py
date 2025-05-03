@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
+from .feed_like import FeedLike
 
 class Feed(Base):
     __tablename__ = "feeds"
@@ -15,4 +16,10 @@ class Feed(Base):
 
     # 관계 설정
     user = relationship("User", back_populates="feeds")
-    files = relationship("File", back_populates="feed", cascade="all, delete-orphan") 
+    files = relationship("File", back_populates="feed", cascade="all, delete-orphan")
+    # 피드를 좋아요 누른 사용자 목록 (다대다)
+    liked_by_users = relationship(
+        "User", 
+        secondary="feed_likes", # 중간 테이블 이름 지정
+        back_populates="liked_feeds"
+    ) 
