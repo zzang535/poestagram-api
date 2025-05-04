@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     libmariadb-dev \
     default-libmysqlclient-dev \
     build-essential \
+    libgl1-mesa-glx \   # <-- 이거 추가!
+    ffmpeg \            # <-- moviepy, 비디오 처리하려면 이거도 같이 추천
     && apt-get clean
 
 # 작업 디렉토리 생성
