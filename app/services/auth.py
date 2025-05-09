@@ -13,7 +13,7 @@ from fastapi import HTTPException
 import logging
 import jwt
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer # fast api 에서 제공하는 인증 라이브러리
 from jwt import ExpiredSignatureError, InvalidTokenError  # PyJWT 전용 예외
 
 # 기존 oauth2_scheme (인증 필수 API 용)

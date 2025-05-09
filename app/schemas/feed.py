@@ -17,6 +17,7 @@ class FeedResponse(FeedBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     files: List[File] = []
+    likes_count: int = 0
 
     # SQLAlchemy ORM 객체를 바로 Pydantic 모델로 변환할 수 있게 해주는 설정
     model_config = {"from_attributes": True}

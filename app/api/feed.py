@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, aliased
 from sqlalchemy import exists, select, case
+from sqlalchemy.sql import func
 from typing import List, Optional
 from datetime import datetime
 
@@ -30,41 +31,45 @@ def get_all_feeds(
 ):
     """
     모든 피드를 파일 포함하여 가져오는 API.
-    사용자 인증 시 좋아요 정보 포함.
+    사용자 인증 시 좋아요 정보 포함, 각 피드별 전체 좋아요 수 포함.
     """
     print(f"current_user_id: {current_user_id}")
 
     response_feeds = []
 
+    # 각 피드의 전체 좋아요 수를 계산하는 서브쿼리
+    # 이 서브쿼리는 외부 쿼리의 Feed.id를 참조하므로 상관 서브쿼리(correlated subquery)입니다.
+    likes_count_subquery = (
+        select(func.count(FeedLike.feed_id))
+        .where(FeedLike.feed_id == Feed.id)
+        .correlate(Feed) # Feed 모델과 명시적으로 연결
+        .as_scalar() # 스칼라 값으로 반환하도록 설정
+        .label("likes_count")
+    )
+
     if current_user_id is not None:
-
-        print(f"current_user_id is not None: {current_user_id}") # 디버깅 로그 (추후 제거 가능)
-
-        # FeedLike 테이블에 대한 별칭(alias) 생성
+        print(f"current_user_id is not None: {current_user_id}")
         Like = aliased(FeedLike)
-
-        # JOIN을 먼저 정의하고 add_columns 사용
         query = (
             db.query(Feed)
             .outerjoin(
                 Like,
                 (Feed.id == Like.feed_id) & (Like.user_id == current_user_id)
             )
-            # JOIN된 Like의 feed_id가 NULL이 아닌지 여부로 is_liked 컬럼 추가
-            .add_columns(Like.feed_id.isnot(None).label("is_liked"))
-            # user 및 files 정보 함께 로드
+            .add_columns(
+                Like.feed_id.isnot(None).label("is_liked"),
+                likes_count_subquery # 전체 좋아요 수 서브쿼리 추가
+            )
             .options(joinedload(Feed.user), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
         )
 
-        # 결과 처리
-        for feed, is_liked in query.all():
-
+        # 결과 처리: feed, is_liked, likes_count 순서로 튜플 반환
+        for feed, is_liked_val, likes_count_val in query.all():
             files = [FileSchema.model_validate(f) for f in feed.files]
             user = UserSchema.model_validate(feed.user)
-
             dump = FeedResponse(
                 id=feed.id,
                 description=feed.description,
@@ -72,27 +77,37 @@ def get_all_feeds(
                 created_at=feed.created_at,
                 updated_at=feed.updated_at,
                 files=files,
-                user=user 
+                user=user,
+                likes_count=likes_count_val if likes_count_val is not None else 0 # likes_count_val 매핑
             ).model_dump()
-
-            response_feeds.append(FeedResponseWithLike(**dump, is_liked=bool(is_liked)))
+            response_feeds.append(FeedResponseWithLike(**dump, is_liked=bool(is_liked_val)))
 
     else:
-        # 사용자가 로그인하지 않은 경우: 좋아요 정보 없이 조회 (is_liked=False)
-        feeds = (
+        # 사용자가 로그인하지 않은 경우
+        query = (
             db.query(Feed)
-            # user 및 files 정보 함께 로드
+            .add_columns(likes_count_subquery) # 전체 좋아요 수 서브쿼리 추가
             .options(joinedload(Feed.user), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
-            .all()
         )
-        for feed in feeds:
-            dump = FeedResponse.model_validate(feed).model_dump()
+        # 결과 처리: feed, likes_count 순서로 튜플 반환
+        for feed, likes_count_val in query.all():
+            files = [FileSchema.model_validate(f) for f in feed.files]
+            user = UserSchema.model_validate(feed.user)
+            dump = FeedResponse(
+                id=feed.id,
+                description=feed.description,
+                frame_ratio=feed.frame_ratio,
+                created_at=feed.created_at,
+                updated_at=feed.updated_at,
+                files=files,
+                user=user,
+                likes_count=likes_count_val if likes_count_val is not None else 0 # likes_count_val 매핑
+            ).model_dump()
             response_feeds.append(FeedResponseWithLike(**dump, is_liked=False))
 
-    # 응답 반환
     return FeedListResponseWithLike(feeds=response_feeds)
 
 @router.post("/", response_model=FeedResponse, status_code=201)
