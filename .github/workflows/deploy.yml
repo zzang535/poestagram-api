@@ -36,5 +36,5 @@ jobs:
           docker build -t my-fastapi-app .
 
           echo "[5] Starting new container..."
-          docker run -d --name my-fastapi -p 8000:8000 my-fastapi-app
+          docker run -d --name my-fastapi --link my-mysql:mysql -p 8000:8000 my-fastapi-app
         EOF
