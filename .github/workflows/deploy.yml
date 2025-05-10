@@ -19,7 +19,7 @@ jobs:
 
     - name: Deploy with password SSH
       run: |
-        sshpass -p "${{ vars.RPI_PASSWORD }}" ssh -o StrictHostKeyChecking=no hwangyoon@175.196.226.236 << 'EOF'
+        sshpass -p "${{ vars.RPI_PASSWORD }}" ssh -o StrictHostKeyChecking=no "${{vars.RPI_HOST}}" << 'EOF'
           cd /home/hwangyoon/Project/poestagram-api
 
           echo "[1] Pulling latest code..."
