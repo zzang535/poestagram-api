@@ -1,0 +1,40 @@
+name: Deploy to Raspberry Pi via Password
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Print environment variables
+      run: |
+        echo RPI_PASSWORD: ${{ vars.RPI_PASSWORD }}
+
+    - name: Install sshpass
+      run: sudo apt-get update && sudo apt-get install -y sshpass
+
+    - name: Deploy with password SSH
+      run: |
+        sshpass -p "${{ vars.RPI_PASSWORD }}" ssh -o StrictHostKeyChecking=no hwangyoon@175.196.226.236 << 'EOF'
+          cd /home/hwangyoon/Project/poestagram-api
+
+          echo "[1] Pulling latest code..."
+          git pull origin main
+
+          echo "[2] Stopping and removing old container..."
+          docker stop my-fastapi || true
+          docker rm my-fastapi || true
+
+          echo "[3] Removing old image..."
+          docker rmi my-fastapi-app || true
+
+          echo "[4] Building new image..."
+          docker build -t my-fastapi-app .
+
+          echo "[5] Starting new container..."
+          docker run -d --name my-fastapi -p 8000:8000 my-fastapi-app
+        EOF
