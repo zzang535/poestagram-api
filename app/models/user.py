@@ -16,10 +16,10 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # 관계 설정
-    feeds = relationship("Feed", back_populates="user", cascade="all, delete-orphan")
-    # 사용자가 좋아요 누른 피드 목록 (다대다)
-    liked_feeds = relationship(
+    feeds = relationship("Feed", back_populates="user", cascade="all, delete-orphan") # 사용자가 작성한 피드 목록
+    liked_feeds = relationship( # 사용자가 좋아요 누른 피드 목록 (다대다)
         "Feed", 
         secondary="feed_likes", # 중간 테이블 이름 지정
         back_populates="liked_by_users"
     ) 
+    comments = relationship("Comment", back_populates="user", cascade="all, delete-orphan") # 사용자가 작성한 댓글 목록

@@ -12,27 +12,32 @@ load_dotenv()
 # 프로젝트 루트 경로를 Python 경로에 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+# DB URL 구성
+def get_url():
+    user = os.getenv("DB_USERNAME")
+    password = os.getenv("DB_PASSWORD")
+    host = os.getenv("DB_HOST")
+    db_name = os.getenv("DB_DATABASE")
+    port = os.getenv("DB_PORT", "3306")  # 기본 포트
+    return f"mysql+pymysql://{user}:{password}@{host}:{port}/{db_name}"
+
 from app.db.base import Base
-# 모든 모델 임포트
-from app.models import privacy, user, verify, file  # 모든 모델 파일 임포트
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
-config = context.config
+# 모든 모델 파일 임포트 (모델들을 메모리에 로드하고 Base.metadata를 기준으로 자동 생성)
+from app.models import privacy, user, verify, file, comment
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-# add your model's MetaData object here
-# for 'autogenerate' support
+# Base 모델 구조를 기준으로 revision --autogenerate 해라
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+# alembic.ini에 있는 설정 정보를 읽어옴
+config = context.config 
+
+# URL 설정을 여기서 덮어씁니다
+config.set_main_option("sqlalchemy.url", get_url())
+
+# 로그 설정을 초기화 (fileConfig는 Python의 기본 로깅 설정)
+if config.config_file_name is not None: 
+    fileConfig(config.config_file_name)
 
 
 def run_migrations_offline() -> None:

@@ -17,9 +17,11 @@ class Feed(Base):
     # 관계 설정
     user = relationship("User", back_populates="feeds")
     files = relationship("File", back_populates="feed", cascade="all, delete-orphan")
+
     # 피드를 좋아요 누른 사용자 목록 (다대다)
     liked_by_users = relationship(
         "User", 
         secondary="feed_likes", # 중간 테이블 이름 지정
         back_populates="liked_feeds"
     ) 
+    comments = relationship("Comment", back_populates="feed", cascade="all, delete-orphan") # 피드에 달린 댓글 목록
