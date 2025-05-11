@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, privacy, test, file, feed, users
+from app.api import auth, privacy, test, file, feed, users, comment
 import logging
 
 # 로깅 설정
@@ -27,8 +27,9 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(privacy.router, prefix="/api/privacy", tags=["privacy"])
 app.include_router(test.router, prefix="/api/test", tags=["test"])
 app.include_router(file.router, prefix="/api/files", tags=["files"])
-app.include_router(feed.router, prefix="/api/feeds", tags=["feeds"])
+app.include_router(feed.router, prefix="/api", tags=["feeds"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(comment.router, prefix="/api", tags=["comments"])
 
 @app.get("/")
 async def root():

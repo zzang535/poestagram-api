@@ -12,17 +12,25 @@ from app.models.user import User as UserModel
 from app.schemas.file import File as FileSchema
 from app.schemas.user import User as UserSchema
 from app.models.feed_like import FeedLike
+from app.services.auth import get_current_user_id, get_optional_current_user_id
 from app.schemas.feed import (
     FeedCreate,
     FeedResponse,
     FeedResponseWithLike,
     FeedListResponseWithLike
 )
-from app.services.auth import get_current_user_id, get_optional_current_user_id
+from app.schemas.comment import (
+    CommentCreate,
+    CommentUpdate,
+    CommentResponse,
+    CommentListResponse
+)
+from app.crud import comment as comment_crud
+
 
 router = APIRouter()
 
-@router.get("/", response_model=FeedListResponseWithLike)
+@router.get("/feeds", response_model=FeedListResponseWithLike)
 def get_all_feeds(
     offset: int = 0,
     limit: int = 20,
@@ -110,7 +118,7 @@ def get_all_feeds(
 
     return FeedListResponseWithLike(feeds=response_feeds)
 
-@router.post("/", response_model=FeedResponse, status_code=201)
+@router.post("/feeds", response_model=FeedResponse, status_code=201)
 def create_feed_endpoint(
     feed_data: FeedCreate,
     db: Session = Depends(get_db),
@@ -139,7 +147,7 @@ def create_feed_endpoint(
     
     return FeedResponse.from_orm(new_feed)
 
-@router.post("/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
+@router.post("/feeds/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
 def like_feed(
     feed_id: int,
     db: Session = Depends(get_db),
@@ -177,7 +185,7 @@ def like_feed(
         raise HTTPException(status_code=500, detail=f"좋아요 추가 중 오류 발생: {str(e)}")
 
 
-@router.delete("/{feed_id}/like", status_code=200, summary="피드 좋아요 취소")
+@router.delete("/feeds/{feed_id}/like", status_code=200, summary="피드 좋아요 취소")
 def unlike_feed(
     feed_id: int,
     db: Session = Depends(get_db),
@@ -211,3 +219,27 @@ def unlike_feed(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"좋아요 취소 중 오류 발생: {str(e)}")
+    
+
+
+@router.post("/feeds/{feed_id}/comments", response_model=CommentResponse, status_code=201)
+def create_comment(
+    feed_id: int,
+    comment: CommentCreate,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    피드에 댓글 생성
+    """ 
+    print(f"feed_id: {feed_id}")
+    print(f"comment: {comment}")
+    print(f"current_user_id: {current_user_id}")
+    db_comment = comment_crud.create_comment(
+        db, 
+        feed_id=feed_id, 
+        content=comment.content, 
+        user_id=current_user_id
+    )
+    return db_comment
+
