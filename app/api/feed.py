@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload, aliased
-from sqlalchemy import exists, select, case
+from sqlalchemy import exists, select, case, desc
 from sqlalchemy.sql import func
 from typing import List, Optional
 from datetime import datetime
@@ -9,6 +9,7 @@ from app.db.base import get_db
 from app.models.feed import Feed
 from app.models.file import File as FileModel
 from app.models.user import User as UserModel
+from app.models.comment import Comment
 from app.schemas.file import File as FileSchema
 from app.schemas.user import User as UserSchema
 from app.models.feed_like import FeedLike
@@ -25,8 +26,6 @@ from app.schemas.comment import (
     CommentResponse,
     CommentListResponse
 )
-from app.crud import comment as comment_crud
-
 
 router = APIRouter()
 
@@ -232,15 +231,23 @@ def create_comment(
     """
     피드에 댓글 생성
     """ 
-    print(f"feed_id: {feed_id}")
-    print(f"comment: {comment}")
-    print(f"current_user_id: {current_user_id}")
-    db_comment = comment_crud.create_comment(
-        db, 
+    # 피드 존재 여부 확인
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
+    
+    # 댓글 생성
+    db_comment = Comment(
         feed_id=feed_id, 
         content=comment.content, 
         user_id=current_user_id
     )
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+    
+    # 댓글과 관련된 사용자 정보 로드
+    db_comment = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.id == db_comment.id).first()
     return db_comment
 
 @router.get("/feeds/{feed_id}/comments", response_model=CommentListResponse, summary="피드 댓글 목록 조회")
@@ -257,13 +264,21 @@ def get_feed_comments(
     - 댓글은 최신순(작성일 내림차순)으로 정렬됩니다.
     - 댓글 작성자 정보도 함께 반환됩니다.
     """
-    # 피드 존재 여부 확인 (선택적으로 추가)
+    # 피드 존재 여부 확인
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
     
     # 피드의 댓글 목록 조회
-    comments = comment_crud.get_comments_by_feed(db, feed_id, skip, limit)
+    comments = (
+        db.query(Comment)
+        .filter(Comment.feed_id == feed_id)
+        .options(joinedload(Comment.user))  # 사용자 정보 함께 로드
+        .order_by(desc(Comment.created_at))  # 최신순 정렬
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
     
     # 응답 반환
     return CommentListResponse(comments=comments)
