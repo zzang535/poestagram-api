@@ -243,3 +243,28 @@ def create_comment(
     )
     return db_comment
 
+@router.get("/feeds/{feed_id}/comments", response_model=CommentListResponse, summary="피드 댓글 목록 조회")
+def get_feed_comments(
+    feed_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """
+    특정 피드의 댓글 목록을 조회합니다.
+    
+    - 페이지네이션을 지원합니다 (skip, limit 파라미터).
+    - 댓글은 최신순(작성일 내림차순)으로 정렬됩니다.
+    - 댓글 작성자 정보도 함께 반환됩니다.
+    """
+    # 피드 존재 여부 확인 (선택적으로 추가)
+    feed = db.query(Feed).filter(Feed.id == feed_id).first()
+    if not feed:
+        raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
+    
+    # 피드의 댓글 목록 조회
+    comments = comment_crud.get_comments_by_feed(db, feed_id, skip, limit)
+    
+    # 응답 반환
+    return CommentListResponse(comments=comments)
+
