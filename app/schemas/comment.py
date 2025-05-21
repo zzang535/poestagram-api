@@ -29,3 +29,11 @@ class CommentListResponse(BaseModel):
     comments: List[CommentResponse]
     
     
+# 좋아요 정보가 포함된 댓글 응답 스키마
+class CommentResponseWithLike(CommentResponse):
+    is_liked: bool
+    likes_count: int
+
+# 좋아요 정보가 포함된 댓글 목록 응답 스키마
+class CommentListResponseWithLike(BaseModel):
+    comments: List[CommentResponseWithLike]

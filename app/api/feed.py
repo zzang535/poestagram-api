@@ -26,6 +26,13 @@ from app.schemas.comment import (
     CommentResponse,
     CommentListResponse
 )
+from app.models.comment_like import CommentLike
+from app.schemas.comment import (
+    CommentResponseWithLike,
+    CommentListResponseWithLike
+)
+
+
 
 router = APIRouter()
 
@@ -250,36 +257,105 @@ def create_comment(
     db_comment = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.id == db_comment.id).first()
     return db_comment
 
-@router.get("/feeds/{feed_id}/comments", response_model=CommentListResponse, summary="피드 댓글 목록 조회")
+# @router.get("/feeds/{feed_id}/comments", response_model=CommentListResponse, summary="피드 댓글 목록 조회")
+# def get_feed_comments(
+#     feed_id: int,
+#     skip: int = 0,
+#     limit: int = 50,
+#     db: Session = Depends(get_db)
+# ):
+#     """
+#     특정 피드의 댓글 목록을 조회합니다.
+    
+#     - 페이지네이션을 지원합니다 (skip, limit 파라미터).
+#     - 댓글은 최신순(작성일 내림차순)으로 정렬됩니다.
+#     - 댓글 작성자 정보도 함께 반환됩니다.
+#     """
+#     # 피드 존재 여부 확인
+#     feed = db.query(Feed).filter(Feed.id == feed_id).first()
+#     if not feed:
+#         raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
+    
+#     # 피드의 댓글 목록 조회
+#     comments = (
+#         db.query(Comment)
+#         .filter(Comment.feed_id == feed_id)
+#         .options(joinedload(Comment.user))  # 사용자 정보 함께 로드
+#         .order_by(desc(Comment.created_at))  # 최신순 정렬
+#         .offset(skip)
+#         .limit(limit)
+#         .all()
+#     )
+    
+#     # 응답 반환
+#     return CommentListResponse(comments=comments)
+
+
+
+@router.get(
+    "/feeds/{feed_id}/comments", 
+    response_model=CommentListResponseWithLike,
+    summary="피드 댓글 목록 조회"
+)
 def get_feed_comments(
     feed_id: int,
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_optional_current_user_id)
 ):
     """
     특정 피드의 댓글 목록을 조회합니다.
     
-    - 페이지네이션을 지원합니다 (skip, limit 파라미터).
+    - 페이지네이션을 지원합니다.
     - 댓글은 최신순(작성일 내림차순)으로 정렬됩니다.
-    - 댓글 작성자 정보도 함께 반환됩니다.
+    - 로그인 시 내가 좋아요를 눌렀는지 포함됩니다.
     """
-    # 피드 존재 여부 확인
+
+    # 피드 존재 확인
     feed = db.query(Feed).filter(Feed.id == feed_id).first()
     if not feed:
         raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
-    
-    # 피드의 댓글 목록 조회
+
+    # 댓글 + 작성자 로드
     comments = (
         db.query(Comment)
         .filter(Comment.feed_id == feed_id)
-        .options(joinedload(Comment.user))  # 사용자 정보 함께 로드
-        .order_by(desc(Comment.created_at))  # 최신순 정렬
+        .options(joinedload(Comment.user))
+        .order_by(Comment.created_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
-    
-    # 응답 반환
-    return CommentListResponse(comments=comments)
 
+    result = []
+
+    for comment in comments:
+        # 좋아요 개수
+        likes_count = db.query(func.count()).filter(
+            CommentLike.comment_id == comment.id
+        ).scalar()
+
+        # 내가 좋아요 눌렀는지 여부 (로그인한 경우만)
+        is_liked = False
+        if current_user_id:
+            is_liked = db.query(
+                exists().where(
+                    (CommentLike.comment_id == comment.id) &
+                    (CommentLike.user_id == current_user_id)
+                )
+            ).scalar()
+
+        result.append(CommentResponseWithLike(
+            id=comment.id,
+            feed_id=comment.feed_id,
+            user_id=comment.user_id,
+            content=comment.content,
+            created_at=comment.created_at,
+            updated_at=comment.updated_at,
+            user=comment.user,
+            likes_count=likes_count,
+            is_liked=is_liked
+        ))
+
+    return CommentListResponseWithLike(comments=result)

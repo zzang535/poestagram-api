@@ -17,3 +17,10 @@ class Comment(Base):
     # 관계 설정
     user = relationship("User", back_populates="comments") # 댓글 작성자
     feed = relationship("Feed", back_populates="comments") # 댓글 속한 피드
+
+     # 댓글 좋아요 관계 설정
+    liked_by_users = relationship(
+        "User",
+        secondary="comment_likes",  # 중간 테이블 이름 지정
+        back_populates="liked_comments"
+    )

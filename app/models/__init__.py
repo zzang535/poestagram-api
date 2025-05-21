@@ -4,3 +4,5 @@ from app.models.privacy import Privacy
 from app.models.file import File
 from app.models.feed import Feed
 from app.models.feed_like import FeedLike 
+from app.models.comment import Comment
+from app.models.comment_like import CommentLike
