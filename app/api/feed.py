@@ -36,7 +36,7 @@ from app.schemas.comment import (
 
 router = APIRouter()
 
-@router.get("/feeds", response_model=FeedListResponseWithLike)
+@router.get("/", response_model=FeedListResponseWithLike)
 def get_all_feeds(
     offset: int = 0,
     limit: int = 20,
@@ -124,7 +124,7 @@ def get_all_feeds(
 
     return FeedListResponseWithLike(feeds=response_feeds)
 
-@router.post("/feeds", response_model=FeedResponse, status_code=201)
+@router.post("/", response_model=FeedResponse, status_code=201)
 def create_feed_endpoint(
     feed_data: FeedCreate,
     db: Session = Depends(get_db),
@@ -153,7 +153,7 @@ def create_feed_endpoint(
     
     return FeedResponse.from_orm(new_feed)
 
-@router.post("/feeds/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
+@router.post("/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
 def like_feed(
     feed_id: int,
     db: Session = Depends(get_db),
@@ -191,7 +191,7 @@ def like_feed(
         raise HTTPException(status_code=500, detail=f"좋아요 추가 중 오류 발생: {str(e)}")
 
 
-@router.delete("/feeds/{feed_id}/like", status_code=200, summary="피드 좋아요 취소")
+@router.delete("/{feed_id}/like", status_code=200, summary="피드 좋아요 취소")
 def unlike_feed(
     feed_id: int,
     db: Session = Depends(get_db),
@@ -228,7 +228,7 @@ def unlike_feed(
     
 
 
-@router.post("/feeds/{feed_id}/comments", response_model=CommentResponse, status_code=201)
+@router.post("/{feed_id}/comments", response_model=CommentResponse, status_code=201)
 def create_comment(
     feed_id: int,
     comment: CommentCreate,
@@ -259,7 +259,7 @@ def create_comment(
 
 
 @router.get(
-    "/feeds/{feed_id}/comments", 
+    "/{feed_id}/comments", 
     response_model=CommentListResponseWithLike,
     summary="피드 댓글 목록 조회"
 )

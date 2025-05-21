@@ -14,7 +14,7 @@ from app.models.comment import Comment
 from app.models.comment_like import CommentLike
 router = APIRouter()
 
-@router.delete("/comments/{comment_id}", status_code=200, summary="댓글 삭제")
+@router.delete("/{comment_id}", status_code=200, summary="댓글 삭제")
 def delete_comment(
     comment_id: int,
     db: Session = Depends(get_db),
@@ -51,7 +51,7 @@ def delete_comment(
 
 
 
-@router.post("/comments/{comment_id}/like", status_code=201, summary="댓글 좋아요")
+@router.post("/{comment_id}/like", status_code=201, summary="댓글 좋아요")
 def like_comment(
     comment_id: int,
     db: Session = Depends(get_db),
@@ -87,7 +87,7 @@ def like_comment(
 
 
 
-@router.delete("/comments/{comment_id}/like", status_code=200, summary="댓글 좋아요 취소")
+@router.delete("/{comment_id}/like", status_code=200, summary="댓글 좋아요 취소")
 def unlike_comment(
     comment_id: int,
     db: Session = Depends(get_db),

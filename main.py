@@ -26,9 +26,9 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(test.router, prefix="/api/test", tags=["test"])
 app.include_router(file.router, prefix="/api/files", tags=["files"])
-app.include_router(feed.router, prefix="/api", tags=["feeds"])
+app.include_router(feed.router, prefix="/api/feeds", tags=["feeds"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(comment.router, prefix="/api", tags=["comments"])
+app.include_router(comment.router, prefix="/api/comments", tags=["comments"])
 
 @app.get("/")
 async def root():
