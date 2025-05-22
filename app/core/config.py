@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     # JWT settings
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key")
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7일
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 60 * 24 * 7  # 7일
+    # ACCESS_TOKEN_EXPIRE_MINUTES: int = 10  # test
     
     # AWS settings
     AWS_ACCESS_KEY_ID: str
