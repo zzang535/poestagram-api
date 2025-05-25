@@ -145,7 +145,7 @@ def create_feed_endpoint(
     db.refresh(new_feed)
 
     if feed_data.file_ids:
-        files = db.query(File).filter(File.id.in_(feed_data.file_ids)).all()
+        files = db.query(FileModel).filter(FileModel.id.in_(feed_data.file_ids)).all()
         for file in files:
             file.feed_id = new_feed.id
             
