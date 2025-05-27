@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 class UserBase(BaseModel):
-    nickname: str
+    username: str
     email: EmailStr
     # Pydantic v2: ORM 객체에서 속성으로 꺼내올 때 필요
     class Config:
@@ -14,7 +14,7 @@ class UserCreate(UserBase):
     privacy_policy: bool # 모델 기준으로 추가
 
 class UserUpdate(UserBase):
-    nickname: Optional[str] = None
+    username: Optional[str] = None
 
 class UserInDBBase(UserBase):
     id: int

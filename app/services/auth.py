@@ -15,12 +15,16 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer # fast api 에서 제공하는 인증 라이브러리
 from jwt import ExpiredSignatureError, InvalidTokenError  # PyJWT 전용 예외
+from passlib.context import CryptContext
 
 # 기존 oauth2_scheme (인증 필수 API 용)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token") # 실제 tokenUrl 확인
 
 # 새로운 oauth2_scheme_optional (선택적 인증 API 용)
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token", auto_error=False) # auto_error=False
+
+# 비밀번호 암호화 설정
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +33,14 @@ logger = logging.getLogger(__name__)
 def generate_verification_code():
     """6자리 랜덤 인증번호 생성"""
     return ''.join(random.choices(string.digits, k=6))
+
+def hash_password(password: str) -> str:
+    """비밀번호를 해시화"""
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """비밀번호 검증"""
+    return pwd_context.verify(plain_password, hashed_password)
 
 def send_verification_email(email: str, verification_code: str, db: Session):
     """이메일로 인증번호 전송 및 저장"""
@@ -80,16 +92,16 @@ def send_verification_email(email: str, verification_code: str, db: Session):
         db.rollback()
         return False
 
-def create_user(db: Session, email: str, nickname: str, terms_of_service: bool, privacy_policy: bool):
+def create_user(db: Session, email: str, username: str, password: str, terms_of_service: bool, privacy_policy: bool):
     """새로운 사용자 생성"""
     try:
         # 이메일 중복 확인
         if db.query(User).filter(User.email == email).first():
             raise HTTPException(status_code=400, detail="이미 등록된 이메일입니다.")
         
-        # 닉네임 중복 확인
-        if db.query(User).filter(User.nickname == nickname).first():
-            raise HTTPException(status_code=400, detail="이미 사용 중인 닉네임입니다.")
+        # 사용자명 중복 확인
+        if db.query(User).filter(User.username == username).first():
+            raise HTTPException(status_code=400, detail="이미 사용 중인 사용자명입니다.")
         
         # 필수 약관 동의 확인
         if not terms_of_service or not privacy_policy:
@@ -104,10 +116,14 @@ def create_user(db: Session, email: str, nickname: str, terms_of_service: bool, 
         if not verify:
             raise HTTPException(status_code=400, detail="이메일 인증이 필요합니다.")
         
+        # 비밀번호 해시화
+        hashed_password = hash_password(password)
+        
         # 사용자 생성
         user = User(
             email=email,
-            nickname=nickname,
+            username=username,
+            password=hashed_password,
             terms_of_service=terms_of_service,
             privacy_policy=privacy_policy
         )
@@ -131,6 +147,17 @@ def check_email_exists(db: Session, email: str) -> bool:
         return user is not None
     except Exception as e:
         logger.error(f"이메일 중복 체크 중 오류 발생: {str(e)}")
+        raise
+
+def check_username_exists(db: Session, username: str) -> bool:
+    """
+    사용자명 중복 체크
+    """
+    try:
+        user = db.query(User).filter(User.username == username).first()
+        return user is not None
+    except Exception as e:
+        logger.error(f"사용자명 중복 체크 중 오류 발생: {str(e)}")
         raise
 
 def verify_code(db: Session, email: str, code: str) -> bool:

@@ -8,13 +8,15 @@ from app.schemas.auth import (
     VerifyCodeRequest, VerifyCodeResponse,
     SignUpRequest, SignUpResponse,
     EmailCheckRequest, EmailCheckResponse,
+    UsernameCheckRequest, UsernameCheckResponse,
     LoginRequest, LoginResponse
 )
-from app.services.auth import generate_verification_code, send_verification_email, create_user, verify_code, check_email_exists, create_access_token
+from app.services.auth import generate_verification_code, send_verification_email, create_user, verify_code, check_email_exists, check_username_exists, create_access_token, verify_password
 from app.models.verify import Verify
 from app.models.user import User
 from sqlalchemy import desc
 import logging
+from fastapi import status
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +40,23 @@ async def check_email(request: EmailCheckRequest, db: Session = Depends(get_db))
     except Exception as e:
         logger.error(f"이메일 중복 체크 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=f"이메일 중복 체크 중 오류가 발생했습니다: {str(e)}")
+
+@router.post("/check-username", response_model=UsernameCheckResponse)
+async def check_username(request: UsernameCheckRequest, db: Session = Depends(get_db)):
+    """
+    사용자명 중복 체크 API
+    """
+    try:
+        logger.info(f"사용자명 중복 체크 요청: {request.username}")
+        exists = check_username_exists(db, request.username)
+        
+        return UsernameCheckResponse(
+            exists=exists,
+            message="이미 사용 중인 사용자명입니다." if exists else "사용 가능한 사용자명입니다."
+        )
+    except Exception as e:
+        logger.error(f"사용자명 중복 체크 중 오류 발생: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"사용자명 중복 체크 중 오류가 발생했습니다: {str(e)}")
 
 @router.post("/send-verification", response_model=EmailVerificationResponse)
 async def send_verification(request: EmailVerificationRequest, db: Session = Depends(get_db)):
@@ -102,13 +121,14 @@ async def verify_code(request: VerifyCodeRequest, db: Session = Depends(get_db))
 @router.post("/signup", response_model=SignUpResponse)
 async def signup(request: SignUpRequest, db: Session = Depends(get_db)):
     try:
-        logger.info(f"회원가입 요청: {request.email}, {request.nickname}")
+        logger.info(f"회원가입 요청: {request.email}, {request.username}")
         
         # 사용자 생성
         user = create_user(
             db=db,
             email=request.email,
-            nickname=request.nickname,
+            username=request.username,
+            password=request.password,
             terms_of_service=request.terms_of_service,
             privacy_policy=request.privacy_policy
         )
@@ -130,13 +150,17 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     로그인 API
     """
     try:
-        logger.info(f"로그인 요청: {request.email}")
+        logger.info(f"로그인 요청: {request.username}")
         
-        # 이메일로 사용자 검색
-        user = db.query(User).filter(User.email == request.email).first()
+        # 사용자명으로 사용자 검색
+        user = db.query(User).filter(User.username == request.username).first()
         
-        if not user:
-            raise HTTPException(status_code=404, detail="존재하지 않는 이메일입니다.")
+        if not user or not verify_password(request.password, user.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="사용자명 또는 비밀번호가 잘못되었습니다.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         
         # JWT 토큰 생성
         access_token = create_access_token(
@@ -148,7 +172,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             message="로그인이 완료되었습니다.",
             user_id=user.id,
             email=user.email,
-            nickname=user.nickname,
+            username=user.username,
             access_token=access_token,
             token_type="bearer"
         )

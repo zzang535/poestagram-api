@@ -16,7 +16,8 @@ class VerifyCodeResponse(BaseModel):
 
 class SignUpRequest(BaseModel):
     email: EmailStr
-    nickname: str
+    username: str
+    password: str
     terms_of_service: bool
     privacy_policy: bool
 
@@ -31,14 +32,22 @@ class EmailCheckResponse(BaseModel):
     exists: bool
     message: str
 
+class UsernameCheckRequest(BaseModel):
+    username: str
+
+class UsernameCheckResponse(BaseModel):
+    exists: bool
+    message: str
+
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str
+    password: str
 
 class LoginResponse(BaseModel):
     message: str
     user_id: int
     email: str
-    nickname: str
+    username: str
     access_token: str
     token_type: str
 
