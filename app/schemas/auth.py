@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from typing import Optional, Any
 
 class EmailVerificationRequest(BaseModel):
     email: EmailStr
@@ -40,7 +41,7 @@ class UsernameCheckResponse(BaseModel):
     message: str
 
 class LoginRequest(BaseModel):
-    username: str
+    identifier: str
     password: str
 
 class LoginResponse(BaseModel):
@@ -50,5 +51,13 @@ class LoginResponse(BaseModel):
     username: str
     access_token: str
     token_type: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+class PasswordResetResponse(BaseModel):
+    message: str
 
 # ... 나머지 코드 ... 

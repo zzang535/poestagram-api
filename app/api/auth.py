@@ -9,14 +9,22 @@ from app.schemas.auth import (
     SignUpRequest, SignUpResponse,
     EmailCheckRequest, EmailCheckResponse,
     UsernameCheckRequest, UsernameCheckResponse,
-    LoginRequest, LoginResponse
+    LoginRequest, LoginResponse,
+    PasswordResetRequest, PasswordResetResponse
 )
-from app.services.auth import generate_verification_code, send_verification_email, create_user, verify_code, check_email_exists, check_username_exists, create_access_token, verify_password
+from app.services.auth import (
+    generate_verification_code, send_verification_email, 
+    create_user, verify_code, check_email_exists, 
+    check_username_exists, create_access_token, verify_password,
+    reset_password
+)
 from app.models.verify import Verify
 from app.models.user import User
 from sqlalchemy import desc
 import logging
 from fastapi import status
+from typing import Optional
+import re # 정규표현식 사용을 위해 추가 (더 엄격한 이메일 검증 시)
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -149,16 +157,28 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
     로그인 API
     """
+    print("login")
+    print(request)
     try:
-        logger.info(f"로그인 요청: {request.username}")
+        user: Optional[User] = None
+        identifier = request.identifier
+        logger.info(f"로그인 요청: {identifier}")
+
+        # identifier가 이메일 형식인지 간단히 확인 (더 엄격하게 하려면 정규식 사용)
+        # 예: is_email = bool(re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", identifier))
+        is_email = "@" in identifier and "." in identifier # 간단한 이메일 형식 체크
         
-        # 사용자명으로 사용자 검색
-        user = db.query(User).filter(User.username == request.username).first()
+        if is_email:
+            logger.info(f"로그인 시도 (이메일): {identifier}")
+            user = db.query(User).filter(User.email == identifier).first()
+        else:
+            logger.info(f"로그인 시도 (사용자명): {identifier}")
+            user = db.query(User).filter(User.username == identifier).first()
         
         if not user or not verify_password(request.password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="사용자명 또는 비밀번호가 잘못되었습니다.",
+                detail="식별자 또는 비밀번호가 잘못되었습니다.",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         
@@ -180,4 +200,40 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         raise e
     except Exception as e:
         logger.error(f"로그인 중 오류 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"로그인 중 오류가 발생했습니다: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"로그인 중 오류가 발생했습니다: {str(e)}")
+
+@router.post("/reset-password", response_model=PasswordResetResponse)
+async def reset_password_endpoint(
+    request: PasswordResetRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    사용자 비밀번호 변경 API
+
+    - 이메일, 인증 코드, 새 비밀번호를 입력받습니다.
+    - 이메일과 인증 코드가 유효하고 인증된 상태인지 확인합니다.
+    - 사용자를 찾아 새 비밀번호로 업데이트합니다.
+    """
+
+    print("reset-password")
+    print(request)
+    try:
+        logger.info(f"비밀번호 변경 요청: {request.email}")
+        success = reset_password(
+            db=db,
+            email=request.email,
+            code=request.code,
+            new_password=request.new_password
+        )
+        if success:
+            return PasswordResetResponse(message="비밀번호가 성공적으로 변경되었습니다.")
+        else:
+            # 이 경우는 change_password 함수 내에서 HTTPException이 발생하여
+            # 여기까지 오지 않아야 하지만, 만약을 위해 추가
+            raise HTTPException(status_code=500, detail="비밀번호 변경에 실패했습니다.") 
+            
+    except HTTPException as e:
+        raise e # 서비스에서 발생한 HTTPException을 그대로 전달
+    except Exception as e:
+        logger.error(f"비밀번호 변경 API 처리 중 오류 발생: {request.email}, {str(e)}")
+        raise HTTPException(status_code=500, detail=f"비밀번호 변경 처리 중 오류가 발생했습니다: {str(e)}") 

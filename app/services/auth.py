@@ -258,3 +258,42 @@ def get_optional_current_user_id(token: Optional[str] = Depends(oauth2_scheme_op
         # 예상치 못한 다른 오류 로깅 (선택적)
         logger.error(f"Unexpected error in get_optional_current_user_id: {e}")
         return None
+
+def reset_password(db: Session, email: str, code: str, new_password: str) -> bool:
+    """사용자 비밀번호를 변경합니다."""
+    try:
+        # 1. 이메일 인증 정보 확인
+        verify_record = db.query(Verify).filter(
+            Verify.email == email,
+            Verify.code == code,
+            Verify.is_verified == True
+        ).first()
+
+        if not verify_record:
+            logger.warning(f"유효하지 않은 인증 정보 또는 미인증: {email}, code: {code}")
+            raise HTTPException(status_code=400, detail="유효하지 않은 인증 정보이거나 인증되지 않았습니다.")
+
+        # 2. 사용자 조회
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            logger.warning(f"비밀번호 변경 요청 - 사용자 없음: {email}")
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 3. 새 비밀번호 해시화 및 업데이트
+        hashed_password = hash_password(new_password)
+        user.password = hashed_password
+        db.commit()
+        
+        # 비밀번호 변경 후 인증 코드 무효화 (선택적이지만 권장)
+        # db.delete(verify_record)
+        # db.commit()
+
+        logger.info(f"사용자 {email}의 비밀번호가 성공적으로 변경되었습니다.")
+        return True
+    except HTTPException as e:
+        db.rollback()
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"비밀번호 변경 중 오류 발생: {email}, {str(e)}")
+        raise HTTPException(status_code=500, detail=f"비밀번호 변경 중 오류가 발생했습니다: {str(e)}")
