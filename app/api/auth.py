@@ -177,9 +177,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         
         if not user or not verify_password(request.password, user.password):
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="식별자 또는 비밀번호가 잘못되었습니다.",
-                headers={"WWW-Authenticate": "Bearer"},
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="로그인 정보가 올바르지 않습니다.",
             )
         
         # JWT 토큰 생성
