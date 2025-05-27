@@ -21,4 +21,5 @@ class File(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     # 관계 설정
-    feed = relationship("Feed", back_populates="files") 
+    feed = relationship("Feed", back_populates="files")
+    profile_user = relationship("User", back_populates="profile_file", foreign_keys="User.profile_file_id")
