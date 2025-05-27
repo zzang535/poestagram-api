@@ -327,3 +327,37 @@ def get_feed_comments(
         ))
 
     return CommentListResponseWithLike(comments=result)
+
+@router.delete("/{feed_id}", status_code=200, summary="피드 삭제")
+def delete_feed(
+    feed_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id) # 피드 작성자 확인을 위해 현재 사용자 ID 필요
+):
+    """
+    특정 피드를 삭제합니다.
+
+    - 피드의 작성자만 삭제할 수 있습니다.
+    - 피드가 존재하지 않으면 404 오류를 반환합니다.
+    - 권한이 없으면 403 오류를 반환합니다.
+    """
+    # 1. 피드 조회
+    feed_to_delete = db.query(Feed).filter(Feed.id == feed_id).first()
+
+    # 2. 피드 존재 여부 확인
+    if not feed_to_delete:
+        raise HTTPException(status_code=404, detail="삭제할 피드를 찾을 수 없습니다.")
+
+    # 3. 피드 작성자 권한 확인
+    if feed_to_delete.user_id != current_user_id:
+        raise HTTPException(status_code=403, detail="피드를 삭제할 권한이 없습니다.")
+
+    # 4. 피드 삭제
+    try:
+        db.delete(feed_to_delete)
+        db.commit()
+        return {"message": f"피드(ID: {feed_id})가 성공적으로 삭제되었습니다."}
+    except Exception as e:
+        db.rollback()
+        # 데이터베이스 오류 또는 기타 예외 처리
+        raise HTTPException(status_code=500, detail=f"피드 삭제 중 오류 발생: {str(e)}")
