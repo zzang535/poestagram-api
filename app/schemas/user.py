@@ -31,3 +31,13 @@ class User(UserInDBBase):
 
 class UserInDB(UserInDBBase):
     pass # UserInDBBase의 모든 필드를 포함
+
+class UserProfileResponse(UserBase):
+    id: int
+    profile_image_url: Optional[str] = None
+    feeds_count: int
+    created_at: datetime
+    # 필요하다면 다른 필드 추가 가능 (예: 팔로워 수, 팔로잉 수)
+
+    class Config:
+        from_attributes = True
