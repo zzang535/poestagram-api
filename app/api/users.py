@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File as FastAPIFile, UploadFile
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
@@ -8,9 +8,88 @@ from app.models.feed import Feed
 from app.models.user import User
 from app.models.file import File
 from app.schemas.feed import FeedListResponse
-from app.schemas.user import UserProfileResponse
+from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse
+from app.services.auth import get_current_user_id
+from app.services.s3 import upload_files_to_s3
+from app.services.media import split_file_url, get_image_dimensions
+from app.models.file import File as FileModel
+import logging
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+@router.put("/profile-image", response_model=ProfileImageUpdateResponse, summary="프로필 사진 변경")
+async def update_profile_image(
+    file: UploadFile = FastAPIFile(...),
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    현재 로그인한 사용자의 프로필 사진을 변경합니다.
+    
+    - 이미지 파일만 업로드 가능합니다.
+    - 기존 프로필 사진이 있으면 교체됩니다.
+    """
+    try:
+        logger.info(f"프로필 사진 변경 요청: 사용자 ID {current_user_id}, 파일명 {file.filename}")
+
+        # 이미지 파일인지 확인
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다.")
+
+        # 현재 사용자 조회
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 이미지 크기 정보 가져오기
+        width, height = await get_image_dimensions(file)
+        logger.info(f"이미지 크기: {width}x{height} pixels")
+
+        # S3에 파일 업로드
+        file_urls = await upload_files_to_s3([file])
+        if not file_urls:
+            raise HTTPException(status_code=500, detail="파일 업로드에 실패했습니다.")
+
+        # URL을 base_url과 s3_key로 분리
+        base_url, s3_key = split_file_url(file_urls[0])
+
+        # 파일 정보를 DB에 저장
+        file_info = FileModel(
+            file_name=file.filename,
+            base_url=base_url,
+            s3_key=s3_key,
+            content_type=file.content_type,
+            file_size=file.size,
+            width=width,
+            height=height
+        )
+        db.add(file_info)
+        db.flush()  # ID를 즉시 생성
+
+        # 사용자의 profile_file_id 업데이트
+        user.profile_file_id = file_info.id
+        db.commit()
+
+        # 프로필 이미지 URL 생성
+        profile_image_url = f"{base_url}/{s3_key}"
+
+        logger.info(f"프로필 사진 변경 완료: 사용자 ID {current_user_id}, 파일 ID {file_info.id}")
+        
+        return ProfileImageUpdateResponse(
+            message="프로필 사진이 성공적으로 변경되었습니다.",
+            profile_image_url=profile_image_url
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"프로필 사진 변경 중 오류 발생: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"프로필 사진 변경 중 오류가 발생했습니다: {str(e)}")
+
 
 @router.get("/{user_id}", response_model=UserProfileResponse, summary="특정 사용자 정보 조회")
 def get_user_profile(

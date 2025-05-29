@@ -41,3 +41,7 @@ class UserProfileResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+class ProfileImageUpdateResponse(BaseModel):
+    message: str
+    profile_image_url: Optional[str] = None
