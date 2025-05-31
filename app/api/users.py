@@ -237,20 +237,59 @@ def get_user_feeds(
     # 해당 유저의 피드 총 개수 계산
     total_feeds = db.query(Feed).filter(Feed.user_id == user_id).count()
     
-    # 해당 유저의 피드 목록과 연결된 파일 정보 함께 가져오기 (생성 날짜 내림차순으로 정렬)
+    # 해당 유저의 피드 목록과 연결된 파일 정보, 사용자 프로필 정보 함께 가져오기 (생성 날짜 내림차순으로 정렬)
     feeds = (
         db.query(Feed)
         .filter(Feed.user_id == user_id)
-        .options(joinedload(Feed.files))  # 피드와 연결된 파일 정보를 한 번에 가져옴
+        .options(
+            joinedload(Feed.files),  # 피드와 연결된 파일 정보를 한 번에 가져옴
+            joinedload(Feed.user).joinedload(User.profile_file)  # 사용자와 프로필 파일 정보 함께 가져옴
+        )
         .order_by(Feed.created_at.desc())
         .offset(offset)
         .limit(limit)
         .all()
     )
     
+    # 피드 응답 생성 (프로필 이미지 URL 포함)
+    feed_responses = []
+    for feed in feeds:
+        # 프로필 이미지 URL 생성
+        profile_image_url = None
+        if feed.user.profile_file:
+            s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
+            profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+        
+        # UserForFeed 스키마 생성
+        from app.schemas.user import UserForFeed
+        user_data = UserForFeed(
+            id=feed.user.id,
+            username=feed.user.username,
+            email=feed.user.email,
+            bio=feed.user.bio,
+            created_at=feed.user.created_at,
+            updated_at=feed.user.updated_at,
+            terms_of_service=feed.user.terms_of_service,
+            privacy_policy=feed.user.privacy_policy,
+            profile_image_url=profile_image_url
+        )
+        
+        # FeedResponse 생성
+        from app.schemas.feed import FeedResponse
+        feed_response = FeedResponse(
+            id=feed.id,
+            description=feed.description,
+            frame_ratio=feed.frame_ratio,
+            created_at=feed.created_at,
+            updated_at=feed.updated_at,
+            files=feed.files,
+            user=user_data,
+            likes_count=0  # 여기서는 좋아요 수를 계산하지 않음
+        )
+        feed_responses.append(feed_response)
+    
     # 응답 반환
-    return FeedListResponse(feeds=feeds, total=total_feeds) 
-
+    return FeedListResponse(feeds=feed_responses, total=total_feeds)
 
 @router.get("/{user_id}/feeds/index")
 def get_feed_index(

@@ -49,6 +49,7 @@ class LoginResponse(BaseModel):
     user_id: int
     email: str
     username: str
+    profile_image_url: Optional[str] = None
     access_token: str
     token_type: str
 

@@ -8,10 +8,10 @@ from datetime import datetime
 from app.db.base import get_db
 from app.models.feed import Feed
 from app.models.file import File as FileModel
-from app.models.user import User as UserModel
+from app.models.user import User
 from app.models.comment import Comment
 from app.schemas.file import File as FileSchema
-from app.schemas.user import User as UserSchema
+from app.schemas.user import User as UserSchema, UserForFeed as UserSchemaForFeed, UserForFeed
 from app.models.feed_like import FeedLike
 from app.services.auth import get_current_user_id, get_optional_current_user_id
 from app.schemas.feed import (
@@ -74,7 +74,7 @@ def get_all_feeds(
                 Like.feed_id.isnot(None).label("is_liked"),
                 likes_count_subquery # 전체 좋아요 수 서브쿼리 추가
             )
-            .options(joinedload(Feed.user), joinedload(Feed.files))
+            .options(joinedload(Feed.user).joinedload(User.profile_file), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -83,7 +83,25 @@ def get_all_feeds(
         # 결과 처리: feed, is_liked, likes_count 순서로 튜플 반환
         for feed, is_liked_val, likes_count_val in query.all():
             files = [FileSchema.model_validate(f) for f in feed.files]
-            user = UserSchema.model_validate(feed.user)
+            
+            # 프로필 이미지 URL 생성
+            profile_image_url = None
+            if feed.user.profile_file:
+                s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
+                profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+            
+            user = UserSchemaForFeed(
+                id=feed.user.id,
+                username=feed.user.username,
+                email=feed.user.email,
+                bio=feed.user.bio,
+                created_at=feed.user.created_at,
+                updated_at=feed.user.updated_at,
+                terms_of_service=feed.user.terms_of_service,
+                privacy_policy=feed.user.privacy_policy,
+                profile_image_url=profile_image_url
+            )
+            
             dump = FeedResponse(
                 id=feed.id,
                 description=feed.description,
@@ -101,7 +119,7 @@ def get_all_feeds(
         query = (
             db.query(Feed)
             .add_columns(likes_count_subquery) # 전체 좋아요 수 서브쿼리 추가
-            .options(joinedload(Feed.user), joinedload(Feed.files))
+            .options(joinedload(Feed.user).joinedload(User.profile_file), joinedload(Feed.files))
             .order_by(Feed.created_at.desc())
             .offset(offset)
             .limit(limit)
@@ -109,7 +127,25 @@ def get_all_feeds(
         # 결과 처리: feed, likes_count 순서로 튜플 반환
         for feed, likes_count_val in query.all():
             files = [FileSchema.model_validate(f) for f in feed.files]
-            user = UserSchema.model_validate(feed.user)
+            
+            # 프로필 이미지 URL 생성
+            profile_image_url = None
+            if feed.user.profile_file:
+                s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
+                profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+            
+            user = UserSchemaForFeed(
+                id=feed.user.id,
+                username=feed.user.username,
+                email=feed.user.email,
+                bio=feed.user.bio,
+                created_at=feed.user.created_at,
+                updated_at=feed.user.updated_at,
+                terms_of_service=feed.user.terms_of_service,
+                privacy_policy=feed.user.privacy_policy,
+                profile_image_url=profile_image_url
+            )
+            
             dump = FeedResponse(
                 id=feed.id,
                 description=feed.description,
@@ -253,9 +289,40 @@ def create_comment(
     db.commit()
     db.refresh(db_comment)
     
-    # 댓글과 관련된 사용자 정보 로드
-    db_comment = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.id == db_comment.id).first()
-    return db_comment
+    # 댓글과 관련된 사용자 정보 및 프로필 파일 로드
+    db_comment = db.query(Comment).options(
+        joinedload(Comment.user).joinedload(User.profile_file)
+    ).filter(Comment.id == db_comment.id).first()
+    
+    # 프로필 이미지 URL 생성
+    profile_image_url = None
+    if db_comment.user.profile_file:
+        s3_key_to_use = db_comment.user.profile_file.s3_key_thumbnail if db_comment.user.profile_file.s3_key_thumbnail else db_comment.user.profile_file.s3_key
+        profile_image_url = f"{db_comment.user.profile_file.base_url}/{s3_key_to_use}"
+    
+    # UserForFeed 스키마로 사용자 정보 생성
+    user_data = UserForFeed(
+        id=db_comment.user.id,
+        username=db_comment.user.username,
+        email=db_comment.user.email,
+        bio=db_comment.user.bio,
+        created_at=db_comment.user.created_at,
+        updated_at=db_comment.user.updated_at,
+        terms_of_service=db_comment.user.terms_of_service,
+        privacy_policy=db_comment.user.privacy_policy,
+        profile_image_url=profile_image_url
+    )
+    
+    # CommentResponse 생성
+    return CommentResponse(
+        id=db_comment.id,
+        feed_id=db_comment.feed_id,
+        user_id=db_comment.user_id,
+        content=db_comment.content,
+        created_at=db_comment.created_at,
+        updated_at=db_comment.updated_at,
+        user=user_data
+    )
 
 
 @router.get(
@@ -285,11 +352,11 @@ def get_feed_comments(
     if not feed:
         raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다.")
 
-    # 댓글 + 작성자 로드
+    # 댓글 + 작성자 + 프로필 파일 로드
     comments = (
         db.query(Comment)
         .filter(Comment.feed_id == feed_id)
-        .options(joinedload(Comment.user))
+        .options(joinedload(Comment.user).joinedload(User.profile_file))
         .order_by(Comment.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -314,6 +381,25 @@ def get_feed_comments(
                 )
             ).scalar()
 
+        # 프로필 이미지 URL 생성
+        profile_image_url = None
+        if comment.user.profile_file:
+            s3_key_to_use = comment.user.profile_file.s3_key_thumbnail if comment.user.profile_file.s3_key_thumbnail else comment.user.profile_file.s3_key
+            profile_image_url = f"{comment.user.profile_file.base_url}/{s3_key_to_use}"
+        
+        # UserForFeed 스키마로 사용자 정보 생성
+        user_data = UserForFeed(
+            id=comment.user.id,
+            username=comment.user.username,
+            email=comment.user.email,
+            bio=comment.user.bio,
+            created_at=comment.user.created_at,
+            updated_at=comment.user.updated_at,
+            terms_of_service=comment.user.terms_of_service,
+            privacy_policy=comment.user.privacy_policy,
+            profile_image_url=profile_image_url
+        )
+
         result.append(CommentResponseWithLike(
             id=comment.id,
             feed_id=comment.feed_id,
@@ -321,7 +407,7 @@ def get_feed_comments(
             content=comment.content,
             created_at=comment.created_at,
             updated_at=comment.updated_at,
-            user=comment.user,
+            user=user_data,
             likes_count=likes_count,
             is_liked=is_liked
         ))

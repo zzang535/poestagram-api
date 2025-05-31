@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
-from app.schemas.user import User # 사용자 스키마 임포트
+from app.schemas.user import UserForFeed # 사용자 스키마 임포트
 
 
 class CommentBase(BaseModel):
@@ -20,7 +20,7 @@ class CommentResponse(CommentBase):
     content: str
     created_at: datetime
     updated_at: Optional[datetime] = None
-    user: User # 댓글 작성자
+    user: UserForFeed # 댓글 작성자
 
     class Config:
         from_attributes = True

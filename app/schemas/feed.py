@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.schemas.file import File
-from app.schemas.user import User
+from app.schemas.user import UserForFeed
 
 # 사용자 입력용 기본 스키마
 class FeedBase(BaseModel):
@@ -13,7 +13,7 @@ class FeedBase(BaseModel):
 # 피드 응답 스키마
 class FeedResponse(FeedBase):
     id: int
-    user: User
+    user: UserForFeed
     created_at: datetime
     updated_at: Optional[datetime] = None
     files: List[File] = []

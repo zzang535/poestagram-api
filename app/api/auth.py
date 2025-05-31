@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.db.base import get_db
 from app.schemas.auth import (
     EmailVerificationRequest, EmailVerificationResponse,
@@ -170,16 +170,22 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         
         if is_email:
             logger.info(f"로그인 시도 (이메일): {identifier}")
-            user = db.query(User).filter(User.email == identifier).first()
+            user = db.query(User).options(joinedload(User.profile_file)).filter(User.email == identifier).first()
         else:
             logger.info(f"로그인 시도 (사용자명): {identifier}")
-            user = db.query(User).filter(User.username == identifier).first()
+            user = db.query(User).options(joinedload(User.profile_file)).filter(User.username == identifier).first()
         
         if not user or not verify_password(request.password, user.password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="로그인 정보가 올바르지 않습니다.",
             )
+        
+        # 프로필 이미지 URL 생성
+        profile_image_url = None
+        if user.profile_file:
+            s3_key_to_use = user.profile_file.s3_key_thumbnail if user.profile_file.s3_key_thumbnail else user.profile_file.s3_key
+            profile_image_url = f"{user.profile_file.base_url}/{s3_key_to_use}"
         
         # JWT 토큰 생성
         access_token = create_access_token(
@@ -192,6 +198,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             user_id=user.id,
             email=user.email,
             username=user.username,
+            profile_image_url=profile_image_url,
             access_token=access_token,
             token_type="bearer"
         )
