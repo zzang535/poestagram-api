@@ -45,3 +45,10 @@ class UserProfileResponse(UserBase):
 class ProfileImageUpdateResponse(BaseModel):
     message: str
     profile_image_url: Optional[str] = None
+
+class UsernameUpdateRequest(BaseModel):
+    username: str
+
+class UsernameUpdateResponse(BaseModel):
+    message: str
+    username: str

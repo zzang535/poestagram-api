@@ -8,7 +8,7 @@ from app.models.feed import Feed
 from app.models.user import User
 from app.models.file import File
 from app.schemas.feed import FeedListResponse
-from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse
+from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse, UsernameUpdateRequest, UsernameUpdateResponse
 from app.services.auth import get_current_user_id
 from app.services.s3 import upload_files_to_s3
 from app.services.media import split_file_url, get_image_dimensions
@@ -90,6 +90,58 @@ async def update_profile_image(
         logger.error(f"프로필 사진 변경 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=f"프로필 사진 변경 중 오류가 발생했습니다: {str(e)}")
 
+@router.put("/username", response_model=UsernameUpdateResponse, summary="유저네임 변경")
+async def update_username(
+    request: UsernameUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    현재 로그인한 사용자의 유저네임을 변경합니다.
+    
+    - 새로운 유저네임이 이미 사용 중인지 확인합니다.
+    - 중복된 유저네임이 있으면 400 오류를 반환합니다.
+    - 문제없으면 유저네임을 변경합니다.
+    """
+    try:
+        logger.info(f"유저네임 변경 요청: 사용자 ID {current_user_id}, 새 유저네임 {request.username}")
+
+        # 현재 사용자 조회
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 현재 유저네임과 동일한지 확인
+        if user.username == request.username:
+            raise HTTPException(status_code=400, detail="현재 유저네임과 동일합니다.")
+
+        # 새로운 유저네임이 이미 사용 중인지 확인
+        existing_user = db.query(User).filter(
+            User.username == request.username,
+            User.id != current_user_id  # 본인 제외
+        ).first()
+
+        if existing_user:
+            raise HTTPException(status_code=400, detail="이미 사용 중인 유저네임입니다.")
+
+        # 유저네임 변경
+        old_username = user.username
+        user.username = request.username
+        db.commit()
+
+        logger.info(f"유저네임 변경 완료: 사용자 ID {current_user_id}, {old_username} → {request.username}")
+        
+        return UsernameUpdateResponse(
+            message="유저네임이 성공적으로 변경되었습니다.",
+            username=request.username
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"유저네임 변경 중 오류 발생: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"유저네임 변경 중 오류가 발생했습니다: {str(e)}")
 
 @router.get("/{user_id}", response_model=UserProfileResponse, summary="특정 사용자 정보 조회")
 def get_user_profile(
