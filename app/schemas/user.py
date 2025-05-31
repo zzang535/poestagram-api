@@ -5,6 +5,7 @@ from datetime import datetime
 class UserBase(BaseModel):
     username: str
     email: EmailStr
+    bio: Optional[str] = None
     # Pydantic v2: ORM 객체에서 속성으로 꺼내올 때 필요
     class Config:
         from_attributes = True
@@ -15,6 +16,8 @@ class UserCreate(UserBase):
 
 class UserUpdate(UserBase):
     username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    bio: Optional[str] = None
 
 class UserInDBBase(UserBase):
     id: int
@@ -52,3 +55,10 @@ class UsernameUpdateRequest(BaseModel):
 class UsernameUpdateResponse(BaseModel):
     message: str
     username: str
+
+class BioUpdateRequest(BaseModel):
+    bio: Optional[str] = None
+
+class BioUpdateResponse(BaseModel):
+    message: str
+    bio: Optional[str] = None

@@ -8,7 +8,7 @@ from app.models.feed import Feed
 from app.models.user import User
 from app.models.file import File
 from app.schemas.feed import FeedListResponse
-from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse, UsernameUpdateRequest, UsernameUpdateResponse
+from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse, UsernameUpdateRequest, UsernameUpdateResponse, BioUpdateRequest, BioUpdateResponse
 from app.services.auth import get_current_user_id
 from app.services.s3 import upload_files_to_s3
 from app.services.media import split_file_url, get_image_dimensions
@@ -143,6 +143,44 @@ async def update_username(
         logger.error(f"유저네임 변경 중 오류 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=f"유저네임 변경 중 오류가 발생했습니다: {str(e)}")
 
+@router.put("/bio", response_model=BioUpdateResponse, summary="프로필 소개글 변경")
+async def update_bio(
+    request: BioUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user_id: int = Depends(get_current_user_id)
+):
+    """
+    현재 로그인한 사용자의 프로필 소개글을 변경합니다.
+    
+    - bio는 빈 문자열이나 null로 설정할 수 있습니다.
+    """
+    try:
+        logger.info(f"프로필 소개글 변경 요청: 사용자 ID {current_user_id}")
+
+        # 현재 사용자 조회
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # bio 변경
+        old_bio = user.bio
+        user.bio = request.bio
+        db.commit()
+
+        logger.info(f"프로필 소개글 변경 완료: 사용자 ID {current_user_id}")
+        
+        return BioUpdateResponse(
+            message="프로필 소개글이 성공적으로 변경되었습니다.",
+            bio=request.bio
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        db.rollback()
+        logger.error(f"프로필 소개글 변경 중 오류 발생: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"프로필 소개글 변경 중 오류가 발생했습니다: {str(e)}")
+
 @router.get("/{user_id}", response_model=UserProfileResponse, summary="특정 사용자 정보 조회")
 def get_user_profile(
     user_id: int,
@@ -172,6 +210,7 @@ def get_user_profile(
         id=user.id,
         username=user.username,
         email=user.email,
+        bio=user.bio,
         profile_image_url=profile_image_url,
         feeds_count=feeds_count,
         created_at=user.created_at

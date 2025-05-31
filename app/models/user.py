@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String(100), unique=True, nullable=False)
     username = Column(String(50), unique=True, nullable=False)
     password = Column(String(255), nullable=False)
+    bio = Column(Text, nullable=True)  # 사용자 소개글
     profile_file_id = Column(Integer, ForeignKey('files.id'), nullable=True)
     terms_of_service = Column(Boolean, nullable=False, default=False)
     privacy_policy = Column(Boolean, nullable=False, default=False)
