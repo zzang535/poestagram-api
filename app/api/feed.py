@@ -4,6 +4,7 @@ from sqlalchemy import exists, select, case, desc
 from sqlalchemy.sql import func
 from typing import List, Optional
 from datetime import datetime
+import logging
 
 from app.db.base import get_db
 from app.models.feed import Feed
@@ -31,8 +32,10 @@ from app.schemas.comment import (
     CommentResponseWithLike,
     CommentListResponseWithLike
 )
+from app.services.s3 import delete_file_from_s3
 
-
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -414,9 +417,10 @@ def delete_feed(
     - 피드의 작성자만 삭제할 수 있습니다.
     - 피드가 존재하지 않으면 404 오류를 반환합니다.
     - 권한이 없으면 403 오류를 반환합니다.
+    - 피드와 연결된 파일들도 S3와 DB에서 함께 삭제됩니다.
     """
-    # 1. 피드 조회
-    feed_to_delete = db.query(Feed).filter(Feed.id == feed_id).first()
+    # 1. 피드 조회 (연결된 파일들도 함께 로드)
+    feed_to_delete = db.query(Feed).options(joinedload(Feed.files)).filter(Feed.id == feed_id).first()
 
     # 2. 피드 존재 여부 확인
     if not feed_to_delete:
@@ -426,12 +430,42 @@ def delete_feed(
     if feed_to_delete.user_id != current_user_id:
         raise HTTPException(status_code=403, detail="피드를 삭제할 권한이 없습니다.")
 
-    # 4. 피드 삭제
+    # 4. 피드와 연결된 파일들 정보 저장 (나중에 삭제용)
+    feed_files = list(feed_to_delete.files)  # 리스트로 복사
+    
+    # 5. 피드 삭제 (cascade로 연결된 데이터들도 함께 삭제됨)
     try:
         db.delete(feed_to_delete)
         db.commit()
-        return {"message": f"피드(ID: {feed_id})가 성공적으로 삭제되었습니다."}
+        logger.info(f"피드 DB 삭제 완료: ID {feed_id}")
+        
+        # 6. S3에서 관련 파일들 삭제
+        for file in feed_files:
+            try:
+                if file.s3_key:
+                    delete_success = delete_file_from_s3(file.s3_key)
+                    if delete_success:
+                        logger.info(f"피드 파일 S3 삭제 완료: {file.s3_key}")
+                    else:
+                        logger.warning(f"피드 파일 S3 삭제 실패: {file.s3_key}")
+                
+                # DB에서 파일 레코드 삭제 (이미 cascade로 삭제되었을 수 있음)
+                # 하지만 명시적으로 삭제 시도
+                db_file = db.query(FileModel).filter(FileModel.id == file.id).first()
+                if db_file:
+                    db.delete(db_file)
+                    db.commit()
+                    logger.info(f"피드 파일 DB 삭제 완료: ID {file.id}")
+                
+            except Exception as e:
+                logger.error(f"피드 파일 삭제 중 오류 발생 (File ID: {file.id}): {str(e)}")
+                # 개별 파일 삭제 실패해도 계속 진행
+                continue
+        
+        return {"message": f"피드(ID: {feed_id})와 관련 파일들이 성공적으로 삭제되었습니다."}
+        
     except Exception as e:
         db.rollback()
+        logger.error(f"피드 삭제 중 오류 발생: {str(e)}")
         # 데이터베이스 오류 또는 기타 예외 처리
         raise HTTPException(status_code=500, detail=f"피드 삭제 중 오류 발생: {str(e)}")
