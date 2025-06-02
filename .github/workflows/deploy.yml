@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Print environment variables
+    - name: Print environment variable
       run: |
         echo RPI_PASSWORD: ${{ vars.RPI_PASSWORD }}
 
