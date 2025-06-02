@@ -1,24 +1,135 @@
-from fastapi import APIRouter, Depends, HTTPException, File as FastAPIFile, UploadFile
-from sqlalchemy.orm import Session, joinedload
-from typing import List, Optional
 from datetime import datetime
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, File as FastAPIFile, UploadFile
+from sqlalchemy.orm import Session, joinedload, aliased
+from sqlalchemy.sql import func
+from typing import List, Optional
 
 from app.db.base import get_db
 from app.models.feed import Feed
 from app.models.user import User
 from app.models.file import File
-from app.schemas.feed import FeedListResponse
-from app.schemas.user import UserProfileResponse, ProfileImageUpdateResponse, UsernameUpdateRequest, UsernameUpdateResponse, BioUpdateRequest, BioUpdateResponse
-from app.services.auth import get_current_user_id
+from app.models.file import File as FileModel
+from app.models.feed_like import FeedLike
+
+from app.schemas.feed import FeedListResponse, FeedResponseWithLike, FeedListResponseWithLike
+from app.schemas.user import (
+    UserProfileResponse, 
+    ProfileImageUpdateResponse, 
+    UsernameUpdateRequest, 
+    UsernameUpdateResponse, 
+    BioUpdateRequest, 
+    BioUpdateResponse,
+    UserForFeed
+)
+
+from app.services.auth import get_current_user_id, get_optional_current_user_id
 from app.services.s3 import upload_files_to_s3
 from app.services.media import split_file_url, get_image_dimensions
-from app.models.file import File as FileModel
-import logging
+
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+
+@router.get("/{user_id}/feeds", response_model=FeedListResponseWithLike)
+def get_user_feeds(
+    user_id: int,
+    offset: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user_id: Optional[int] = Depends(get_optional_current_user_id)
+):
+    """
+    특정 유저의 모든 피드를 파일 포함하여 가져오는 API
+    """
+    # 해당 유저가 존재하는지 확인
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
+    
+    # 해당 유저의 피드 총 개수 계산
+    total_feeds = db.query(Feed).filter(Feed.user_id == user_id).count()
+    
+    # 해당 유저의 피드 목록과 연결된 파일 정보, 사용자 프로필 정보 함께 가져오기 (생성 날짜 내림차순으로 정렬)
+    feeds = (
+        db.query(Feed)
+        .filter(Feed.user_id == user_id)
+        .options(
+            joinedload(Feed.files),  # 피드와 연결된 파일 정보를 한 번에 가져옴
+            joinedload(Feed.user).joinedload(User.profile_file)  # 사용자와 프로필 파일 정보 함께 가져옴
+        )
+        .order_by(Feed.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # current_user_id가 있을 경우 좋아요 정보 미리 로딩해둠
+    # 다음 쿼리에서 사용
+    liked_feed_ids = set()
+    if current_user_id:
+        liked_rows = (
+            db.query(FeedLike.feed_id)
+            .filter(
+                FeedLike.user_id == current_user_id,
+                FeedLike.feed_id.in_([feed.id for feed in feeds])
+            )
+            .all()
+        )
+        liked_feed_ids = {row.feed_id for row in liked_rows} 
+
+    print(f"liked_feed_ids: {liked_feed_ids}")
+    
+    # 피드 전체 좋아요 수 계산
+    feed_ids = [feed.id for feed in feeds]
+    likes_count_by_feed = dict(
+        db.query(FeedLike.feed_id, func.count())
+        .filter(FeedLike.feed_id.in_(feed_ids))
+        .group_by(FeedLike.feed_id)
+        .all()
+    )
+
+    # 피드 응답 생성 (프로필 이미지 URL 포함)
+    feed_responses = []
+    for feed in feeds:
+        # 프로필 이미지 URL 생성
+        profile_image_url = None
+        if feed.user.profile_file:
+            s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
+            profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+        
+        # UserForFeed 스키마 생성
+        from app.schemas.user import UserForFeed
+        user_data = UserForFeed(
+            id=feed.user.id,
+            username=feed.user.username,
+            created_at=feed.user.created_at,
+            updated_at=feed.user.updated_at,
+            profile_image_url=profile_image_url
+        )
+        
+        # FeedResponse 생성
+        from app.schemas.feed import FeedResponse
+        feed_response = FeedResponseWithLike(
+            id=feed.id,
+            description=feed.description,
+            frame_ratio=feed.frame_ratio,
+            created_at=feed.created_at,
+            updated_at=feed.updated_at,
+            files=feed.files,
+            user=user_data,
+            likes_count=likes_count_by_feed.get(feed.id, 0),
+            is_liked=feed.id in liked_feed_ids  # 추가된 필드
+        )
+        feed_responses.append(feed_response)
+    
+    # 응답 반환
+    return FeedListResponseWithLike(feeds=feed_responses, total=total_feeds)
 
 @router.put("/profile-image", response_model=ProfileImageUpdateResponse, summary="프로필 사진 변경")
 async def update_profile_image(
@@ -219,77 +330,6 @@ def get_user_profile(
         # 만약 UserBase의 필드가 자동으로 매핑되지 않는다면, 여기서 명시적으로 추가 필요
     )
 
-@router.get("/{user_id}/feeds", response_model=FeedListResponse)
-def get_user_feeds(
-    user_id: int,
-    offset: int = 0,
-    limit: int = 20,
-    db: Session = Depends(get_db)
-):
-    """
-    특정 유저의 모든 피드를 파일 포함하여 가져오는 API
-    """
-    # 해당 유저가 존재하는지 확인
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다")
-    
-    # 해당 유저의 피드 총 개수 계산
-    total_feeds = db.query(Feed).filter(Feed.user_id == user_id).count()
-    
-    # 해당 유저의 피드 목록과 연결된 파일 정보, 사용자 프로필 정보 함께 가져오기 (생성 날짜 내림차순으로 정렬)
-    feeds = (
-        db.query(Feed)
-        .filter(Feed.user_id == user_id)
-        .options(
-            joinedload(Feed.files),  # 피드와 연결된 파일 정보를 한 번에 가져옴
-            joinedload(Feed.user).joinedload(User.profile_file)  # 사용자와 프로필 파일 정보 함께 가져옴
-        )
-        .order_by(Feed.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    
-    # 피드 응답 생성 (프로필 이미지 URL 포함)
-    feed_responses = []
-    for feed in feeds:
-        # 프로필 이미지 URL 생성
-        profile_image_url = None
-        if feed.user.profile_file:
-            s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
-            profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
-        
-        # UserForFeed 스키마 생성
-        from app.schemas.user import UserForFeed
-        user_data = UserForFeed(
-            id=feed.user.id,
-            username=feed.user.username,
-            email=feed.user.email,
-            bio=feed.user.bio,
-            created_at=feed.user.created_at,
-            updated_at=feed.user.updated_at,
-            terms_of_service=feed.user.terms_of_service,
-            privacy_policy=feed.user.privacy_policy,
-            profile_image_url=profile_image_url
-        )
-        
-        # FeedResponse 생성
-        from app.schemas.feed import FeedResponse
-        feed_response = FeedResponse(
-            id=feed.id,
-            description=feed.description,
-            frame_ratio=feed.frame_ratio,
-            created_at=feed.created_at,
-            updated_at=feed.updated_at,
-            files=feed.files,
-            user=user_data,
-            likes_count=0  # 여기서는 좋아요 수를 계산하지 않음
-        )
-        feed_responses.append(feed_response)
-    
-    # 응답 반환
-    return FeedListResponse(feeds=feed_responses, total=total_feeds)
 
 @router.get("/{user_id}/feeds/index")
 def get_feed_index(

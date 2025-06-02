@@ -304,12 +304,8 @@ def create_comment(
     user_data = UserForFeed(
         id=db_comment.user.id,
         username=db_comment.user.username,
-        email=db_comment.user.email,
-        bio=db_comment.user.bio,
         created_at=db_comment.user.created_at,
         updated_at=db_comment.user.updated_at,
-        terms_of_service=db_comment.user.terms_of_service,
-        privacy_policy=db_comment.user.privacy_policy,
         profile_image_url=profile_image_url
     )
     
@@ -391,12 +387,8 @@ def get_feed_comments(
         user_data = UserForFeed(
             id=comment.user.id,
             username=comment.user.username,
-            email=comment.user.email,
-            bio=comment.user.bio,
             created_at=comment.user.created_at,
             updated_at=comment.user.updated_at,
-            terms_of_service=comment.user.terms_of_service,
-            privacy_policy=comment.user.privacy_policy,
             profile_image_url=profile_image_url
         )
 

@@ -32,9 +32,16 @@ class UserInDBBase(UserBase):
 class User(UserInDBBase):
     pass # UserInDBBase의 모든 필드를 포함
 
-class UserForFeed(UserInDBBase):
+class UserForFeed(BaseModel):
     """피드에서 사용자 정보를 표시할 때 사용하는 스키마 (프로필 이미지 포함)"""
+    id: int
+    username: str
     profile_image_url: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class UserInDB(UserInDBBase):
     pass # UserInDBBase의 모든 필드를 포함
