@@ -25,7 +25,7 @@ from app.schemas.user import (
 )
 
 from app.services.auth import get_current_user_id, get_optional_current_user_id
-from app.services.s3 import upload_files_to_s3
+from app.services.s3 import upload_files_to_s3, delete_file_from_s3
 from app.services.media import split_file_url, get_image_dimensions
 
 
@@ -100,8 +100,7 @@ def get_user_feeds(
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if feed.user.profile_file:
-            s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
-            profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+            profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
         
         # UserForFeed 스키마 생성
         from app.schemas.user import UserForFeed
@@ -150,10 +149,14 @@ async def update_profile_image(
         if not file.content_type or not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다.")
 
-        # 현재 사용자 조회
-        user = db.query(User).filter(User.id == current_user_id).first()
+        # 현재 사용자 조회 (기존 프로필 파일 정보 포함)
+        user = db.query(User).options(joinedload(User.profile_file)).filter(User.id == current_user_id).first()
         if not user:
             raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+
+        # 기존 프로필 파일 정보 저장 (나중에 삭제용)
+        old_profile_file = user.profile_file
+        old_profile_file_id = user.profile_file_id
 
         # 이미지 크기 정보 가져오기
         width, height = await get_image_dimensions(file)
@@ -183,6 +186,28 @@ async def update_profile_image(
         # 사용자의 profile_file_id 업데이트
         user.profile_file_id = file_info.id
         db.commit()
+
+        # 기존 프로필 파일 정리
+        if old_profile_file:
+            try:
+                # S3에서 기존 파일 삭제
+                if old_profile_file.s3_key:
+                    delete_success = delete_file_from_s3(old_profile_file.s3_key)
+                    if delete_success:
+                        logger.info(f"기존 프로필 이미지 S3 삭제 완료: {old_profile_file.s3_key}")
+                    else:
+                        logger.warning(f"기존 프로필 이미지 S3 삭제 실패: {old_profile_file.s3_key}")
+                
+                # DB에서 기존 파일 레코드 삭제
+                db.delete(old_profile_file)
+                db.commit()
+                logger.info(f"기존 프로필 파일 DB 삭제 완료: ID {old_profile_file_id}")
+                
+            except Exception as e:
+                logger.error(f"기존 프로필 파일 삭제 중 오류 발생: {str(e)}")
+                # 기존 파일 삭제 실패해도 새 파일 업로드는 성공했으므로 계속 진행
+        else:
+            logger.info(f"사용자 ID {current_user_id}는 기존 프로필 이미지가 없어서 삭제할 파일이 없습니다.")
 
         # 프로필 이미지 URL 생성
         profile_image_url = f"{base_url}/{s3_key}"
@@ -311,11 +336,8 @@ def get_user_profile(
 
     profile_image_url = None
     if user.profile_file:
-        # File 모델의 base_url과 s3_key (또는 file_name)을 조합하여 완전한 URL 생성 가정
-        # 예시: profile_image_url = f"{user.profile_file.base_url}/{user.profile_file.s3_key}"
-        # 여기서는 s3_key_thumbnail 이 있다면 그것을 우선 사용하거나, s3_key를 사용
-        s3_key_to_use = user.profile_file.s3_key_thumbnail if user.profile_file.s3_key_thumbnail else user.profile_file.s3_key
-        profile_image_url = f"{user.profile_file.base_url}/{s3_key_to_use}"
+        # File 모델의 base_url과 s3_key를 조합하여 완전한 URL 생성
+        profile_image_url = f"{user.profile_file.base_url}/{user.profile_file.s3_key}"
 
     return UserProfileResponse(
         id=user.id,

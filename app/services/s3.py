@@ -64,4 +64,25 @@ async def upload_files_to_s3(files: List[UploadFile], folder: str = "uploads") -
             logger.error(f"파일 업로드 실패 ({file.filename}): {str(e)}")
             raise e
     
-    return file_urls 
+    return file_urls
+
+def delete_file_from_s3(s3_key: str) -> bool:
+    """
+    S3에서 파일을 삭제합니다.
+    
+    Args:
+        s3_key: 삭제할 파일의 S3 키 (예: "uploads/20231201_120000_image.jpg")
+    
+    Returns:
+        bool: 삭제 성공 여부
+    """
+    try:
+        s3_client.delete_object(
+            Bucket=BUCKET_NAME,
+            Key=s3_key
+        )
+        logger.info(f"S3 파일 삭제 성공: {s3_key}")
+        return True
+    except Exception as e:
+        logger.error(f"S3 파일 삭제 실패 ({s3_key}): {str(e)}")
+        return False 

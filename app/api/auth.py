@@ -184,8 +184,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if user.profile_file:
-            s3_key_to_use = user.profile_file.s3_key_thumbnail if user.profile_file.s3_key_thumbnail else user.profile_file.s3_key
-            profile_image_url = f"{user.profile_file.base_url}/{s3_key_to_use}"
+            profile_image_url = f"{user.profile_file.base_url}/{user.profile_file.s3_key}"
         
         # JWT 토큰 생성
         access_token = create_access_token(

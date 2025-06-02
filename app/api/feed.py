@@ -87,8 +87,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
-                profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+                profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -131,8 +130,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                s3_key_to_use = feed.user.profile_file.s3_key_thumbnail if feed.user.profile_file.s3_key_thumbnail else feed.user.profile_file.s3_key
-                profile_image_url = f"{feed.user.profile_file.base_url}/{s3_key_to_use}"
+                profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -297,8 +295,7 @@ def create_comment(
     # 프로필 이미지 URL 생성
     profile_image_url = None
     if db_comment.user.profile_file:
-        s3_key_to_use = db_comment.user.profile_file.s3_key_thumbnail if db_comment.user.profile_file.s3_key_thumbnail else db_comment.user.profile_file.s3_key
-        profile_image_url = f"{db_comment.user.profile_file.base_url}/{s3_key_to_use}"
+        profile_image_url = f"{db_comment.user.profile_file.base_url}/{db_comment.user.profile_file.s3_key}"
     
     # UserForFeed 스키마로 사용자 정보 생성
     user_data = UserForFeed(
@@ -380,8 +377,7 @@ def get_feed_comments(
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if comment.user.profile_file:
-            s3_key_to_use = comment.user.profile_file.s3_key_thumbnail if comment.user.profile_file.s3_key_thumbnail else comment.user.profile_file.s3_key
-            profile_image_url = f"{comment.user.profile_file.base_url}/{s3_key_to_use}"
+            profile_image_url = f"{comment.user.profile_file.base_url}/{comment.user.profile_file.s3_key}"
         
         # UserForFeed 스키마로 사용자 정보 생성
         user_data = UserForFeed(
