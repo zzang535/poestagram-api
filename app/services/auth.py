@@ -61,24 +61,100 @@ def send_verification_email(email: str, verification_code: str, db: Session):
         sender_email = settings.EMAIL_USER
         sender_password = settings.EMAIL_PASSWORD
         
-        message = MIMEMultipart()
-        message["From"] = sender_email
+        message = MIMEMultipart("alternative")
+        message["From"] = f"Poestagram <{sender_email}>"
         message["To"] = email
-        message["Subject"] = "이메일 인증번호"
+        message["Subject"] = "[Poestagram] 이메일 인증번호"
         
-        body = f"""
-        안녕하세요,
-        
-        요청하신 이메일 인증번호는 다음과 같습니다:
-        
-        {verification_code}
-        
-        이 인증번호는 5분간 유효합니다.
-        
-        감사합니다.
+        # HTML 템플릿
+        html_body = f"""
+        <!DOCTYPE html>
+        <html lang="ko">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Poestagram 이메일 인증</title>
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #ffffff; color: #000000;">
+            <table role="presentation" style="width: 100%; max-width: 480px; margin: 60px auto; border-collapse: collapse;">
+                <tr>
+                    <td style="padding: 0 24px;">
+                        <!-- Header -->
+                        <div style="text-align: center; margin-bottom: 48px;">
+                            <h1 style="margin: 0; color: #000000; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">
+                                Poestagram
+                            </h1>
+                        </div>
+                        
+                        <!-- Main Content -->
+                        <div style="margin-bottom: 48px;">
+                            <h2 style="margin: 0 0 16px 0; color: #000000; font-size: 18px; font-weight: 500;">
+                                이메일 인증
+                            </h2>
+                            
+                            <p style="margin: 0 0 32px 0; color: #666666; font-size: 15px; line-height: 1.5;">
+                                Poestagram 본인 인증을 위한 인증코드입니다.
+                            </p>
+                            
+                            <!-- Verification Code -->
+                            <div style="background-color: #000000; color: #ffffff; text-align: center; padding: 24px; border-radius: 8px; margin: 24px 0;">
+                                <div style="font-size: 32px; font-weight: 700; letter-spacing: 6px; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;">
+                                    {verification_code}
+                                </div>
+                            </div>
+                            
+                            <!-- Security Notice -->
+                            <div style="border-left: 3px solid oklch(0.444 0.177 26.899); padding: 16px 20px; background-color: #fafafa; margin: 24px 0;">
+                                <p style="margin: 0; color: #333333; font-size: 13px; line-height: 1.4;">
+                                    • 이 인증번호는 <strong>3분간</strong> 유효합니다<br>
+                                    • 타인과 공유하지 마세요<br>
+                                    • 요청하지 않았다면 무시해주세요
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <!-- Footer -->
+                        <div style="text-align: center; padding-top: 32px; border-top: 1px solid #eeeeee;">
+                            <p style="margin: 0 0 8px 0; color: #000000; font-size: 14px; font-weight: 500;">
+                                Poestagram
+                            </p>
+                            <p style="margin: 0; color: #999999; font-size: 12px;">
+                                © all rights reserved 2025 싱잉버드
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
         """
         
-        message.attach(MIMEText(body, "plain"))
+        # Plain text 버전 (HTML을 지원하지 않는 클라이언트용)
+        text_body = f"""
+        Poestagram 이메일 인증
+        =====================
+
+        게임 순간을 공유하는 공간
+        
+        Poestagram 회원가입을 위한 인증번호입니다.
+        
+        인증번호: {verification_code}
+        
+        보안 안내:
+        • 이 인증번호는 3분간 유효합니다
+        • 타인과 공유하지 마세요
+        • 요청하지 않았다면 무시해주세요
+        
+        © 2025 싱잉버드
+        """
+        
+        # MIMEText 객체 생성
+        text_part = MIMEText(text_body, "plain", "utf-8")
+        html_part = MIMEText(html_body, "html", "utf-8")
+        
+        # 메시지에 추가
+        message.attach(text_part)
+        message.attach(html_part)
         
         server = smtplib.SMTP("smtp.gmail.com", 587)
         server.starttls()
