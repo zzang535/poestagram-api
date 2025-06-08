@@ -190,6 +190,71 @@ def create_feed_endpoint(
     
     return FeedResponse.from_orm(new_feed)
 
+@router.get("/{feed_id}", response_model=FeedResponseWithLike)
+def get_single_feed(
+    feed_id: int,
+    db: Session = Depends(get_db),
+    current_user_id: Optional[int] = Depends(get_optional_current_user_id)
+):
+    """
+    특정 피드 하나의 정보를 가져오는 API
+    """
+    # 특정 피드 조회
+    feed = (
+        db.query(Feed)
+        .filter(Feed.id == feed_id)
+        .options(
+            joinedload(Feed.files),  # 피드와 연결된 파일 정보를 한 번에 가져옴
+            joinedload(Feed.user).joinedload(User.profile_file)  # 사용자와 프로필 파일 정보 함께 가져옴
+        )
+        .first()
+    )
+    
+    if not feed:
+        raise HTTPException(status_code=404, detail="피드를 찾을 수 없습니다")
+    
+    # current_user_id가 있을 경우 좋아요 정보 확인
+    is_liked = False
+    if current_user_id:
+        like_exists = (
+            db.query(FeedLike)
+            .filter(FeedLike.user_id == current_user_id, FeedLike.feed_id == feed_id)
+            .first()
+        )
+        is_liked = like_exists is not None
+    
+    # 피드 좋아요 수 계산
+    likes_count = db.query(FeedLike).filter(FeedLike.feed_id == feed_id).count()
+    
+    # 프로필 이미지 URL 생성
+    profile_image_url = None
+    if feed.user.profile_file:
+        profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
+    
+    # UserForFeed 스키마 생성
+    user_data = UserForFeed(
+        id=feed.user.id,
+        username=feed.user.username,
+        created_at=feed.user.created_at,
+        updated_at=feed.user.updated_at,
+        profile_image_url=profile_image_url
+    )
+    
+    # FeedResponseWithLike 생성
+    feed_response = FeedResponseWithLike(
+        id=feed.id,
+        description=feed.description,
+        frame_ratio=feed.frame_ratio,
+        created_at=feed.created_at,
+        updated_at=feed.updated_at,
+        files=feed.files,
+        user=user_data,
+        likes_count=likes_count,
+        is_liked=is_liked
+    )
+    
+    return feed_response
+
 @router.post("/{feed_id}/like", status_code=200, summary="피드 좋아요 추가")
 def like_feed(
     feed_id: int,
