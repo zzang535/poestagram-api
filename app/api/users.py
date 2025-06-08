@@ -353,7 +353,7 @@ def get_user_profile(
     )
 
 
-@router.get("/{user_id}/feeds/index")
+@router.get("/{user_id}/feeds/{feed_id}/index")
 def get_feed_index(
     user_id: int,
     feed_id: int,
