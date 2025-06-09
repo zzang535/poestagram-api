@@ -1,4 +1,4 @@
-#!/Users/yoonhwang/Project/poestagram-api/.venv/bin/python3.11
+#!/Users/yoonhwang/Project/poestagram-api/.venv/bin/python3
 
 import sys
 import json
