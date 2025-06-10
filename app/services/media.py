@@ -28,13 +28,31 @@ def split_file_url(file_url: str) -> tuple:
 
 async def get_image_dimensions(file: UploadFile) -> tuple:
     """
-    이미지 파일의 크기 정보를 반환합니다.
+    이미지 파일의 크기 정보를 반환합니다. (EXIF rotation 정보 고려)
     """
     try:
         # 파일 내용을 메모리에 로드
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
         width, height = image.size
+        
+        # EXIF 데이터에서 rotation 정보 확인
+        try:
+            exif = image.getexif()
+            orientation = exif.get(274, 1)  # 274는 Orientation 태그
+            
+            # Orientation 값에 따라 width, height 교환
+            # 5, 6, 7, 8 (90도 또는 270도 회전)인 경우 교환
+            if orientation in [5, 6, 7, 8]:
+                logger.info(f"이미지 EXIF Orientation: {orientation}, width/height 교환")
+                width, height = height, width
+            else:
+                logger.info(f"이미지 EXIF Orientation: {orientation}, width/height 교환 안 함")
+                
+        except Exception as exif_e:
+            logger.warning(f"EXIF 데이터 읽기 오류: {str(exif_e)}")
+            # EXIF 오류가 있어도 기본 크기는 반환
+        
         return width, height
     except Exception as e:
         logger.warning(f"이미지 크기 확인 중 오류 발생: {str(e)}")
@@ -43,11 +61,10 @@ async def get_image_dimensions(file: UploadFile) -> tuple:
         # 파일 포인터를 처음 위치로 되돌림
         await file.seek(0)
 
-async def get_video_dimensions(file: UploadFile) -> tuple:
+async def get_video_dimensions_with_rotation(file: UploadFile) -> tuple:
     """
-    비디오 파일의 width, height를 반환합니다. (회전 고려하지 않음)
+    비디오 파일의 width, height를 반환합니다. (회전 정보 고려하여 최종 크기 반환)
     """
-    width, height = None, None
     temp_filename = None
     try:
         # 임시 파일 생성 및 내용 쓰기
@@ -57,45 +74,13 @@ async def get_video_dimensions(file: UploadFile) -> tuple:
             temp_file.flush()
             temp_filename = temp_file.name
         
-        # moviepy로 비디오 로드 및 크기 가져오기
-        video = VideoFileClip(temp_filename)
-        width, height = video.size
-        video.close() # 리소스 해제
-        
-        return width, height
-    except Exception as e:
-        logger.warning(f"비디오 크기 확인 중 오류 발생 (moviepy): {str(e)}")
-        return None, None # 오류 발생 시 None 반환
-    finally:
-        # 임시 파일 삭제 및 파일 포인터 복구
-        if temp_filename and os.path.exists(temp_filename):
-            try:
-                os.unlink(temp_filename)
-            except Exception as e:
-                 logger.error(f"임시 파일 삭제 중 오류 발생: {str(e)}")
-        await file.seek(0)
-
-async def get_video_rotation(file: UploadFile) -> int:
-    """
-    비디오 파일의 회전 정보를 반환합니다. (ffprobe 사용, 없으면 0 반환)
-    """
-    rotation = 0
-    temp_filename = None
-    try:
-        # 임시 파일 생성 및 내용 쓰기
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
-            contents = await file.read()
-            temp_file.write(contents)
-            temp_file.flush()
-            temp_filename = temp_file.name
-
-        # ffprobe 명령 실행 준비
+        # ffprobe로 비디오 정보 한 번에 가져오기 (크기 + 회전)
         cmd = [
             'ffprobe',
-            '-v', 'error',
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_streams',
             '-select_streams', 'v:0',
-            '-show_entries', 'stream_side_data=rotation', # stream_tags=rotate 대신 side_data 사용 시도
-            '-of', 'json',
             temp_filename
         ]
         
@@ -103,72 +88,74 @@ async def get_video_rotation(file: UploadFile) -> int:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
         
         if result.returncode != 0:
-            logger.warning(f"ffprobe 실행 오류 (stderr): {result.stderr}")
-            # stream_tags=rotate 로 재시도
-            cmd = [
-                'ffprobe',
-                '-v', 'error',
-                '-select_streams', 'v:0',
-                '-show_entries', 'stream_tags=rotate',
-                '-of', 'json',
-                temp_filename
-            ]
-            logger.info(f"Retrying ffprobe command: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            if result.returncode != 0:
-                 logger.warning(f"ffprobe 재시도 오류 (stderr): {result.stderr}")
-                 return 0 # 두 번 모두 실패 시 0 반환
+            logger.warning(f"ffprobe 실행 오류: {result.stderr}")
+            return None, None
 
-        output = result.stdout
-        logger.info(f"ffprobe output: {output}")
-
-        # ffprobe 출력 파싱
+        # JSON 파싱
         try:
-            ffprobe_data = json.loads(output)
-            parsed_rotation = 0 # 파싱된 rotation 임시 저장
-            if 'streams' in ffprobe_data and ffprobe_data['streams']:
-                stream = ffprobe_data['streams'][0]
-                # side_data 확인 (side_data_type 체크 없이 rotation 키 확인)
-                if 'side_data_list' in stream:
-                    for side_data in stream['side_data_list']:
-                        if 'rotation' in side_data:
-                            try:
-                                parsed_rotation = int(side_data['rotation'])
-                                logger.info(f"Rotation found in side_data_list: {parsed_rotation}")
-                                break # 첫 번째 rotation 값 사용
-                            except (ValueError, TypeError):
-                                logger.warning(f"Invalid rotation value in side_data: {side_data['rotation']}")
-                                
-                # side_data에 없으면 tags 확인
-                if parsed_rotation == 0 and 'tags' in stream: # side_data에서 못 찾았을 경우만 tags 확인
-                     try:
-                         parsed_rotation = int(stream['tags'].get('rotate', 0))
-                         if parsed_rotation != 0:
-                             logger.info(f"Rotation found in tags: {parsed_rotation}")
-                     except (ValueError, TypeError):
-                         logger.warning(f"Invalid rotation value in tags: {stream['tags'].get('rotate')}")
-                         parsed_rotation = 0
+            data = json.loads(result.stdout)
+            if not data.get('streams'):
+                logger.warning("스트림 정보를 찾을 수 없습니다")
+                return None, None
+                
+            stream = data['streams'][0]
             
-            # 최종 rotation 값 설정 및 음수 처리
-            rotation = parsed_rotation
+            # 기본 크기 정보
+            width = stream.get('width')
+            height = stream.get('height')
+            
+            if width is None or height is None:
+                logger.warning("비디오 크기 정보를 찾을 수 없습니다")
+                return None, None
+            
+            # 회전 정보 확인
+            rotation = 0
+            
+            # 1. side_data에서 rotation 확인
+            if 'side_data_list' in stream:
+                for side_data in stream['side_data_list']:
+                    if side_data.get('side_data_type') == 'Display Matrix' and 'rotation' in side_data:
+                        try:
+                            rotation = int(float(side_data['rotation']))
+                            logger.info(f"Rotation found in side_data: {rotation}")
+                            break
+                        except (ValueError, TypeError):
+                            pass
+            
+            # 2. tags에서 rotate 확인 (side_data에 없는 경우)
+            if rotation == 0 and 'tags' in stream and 'rotate' in stream['tags']:
+                try:
+                    rotation = int(stream['tags']['rotate'])
+                    logger.info(f"Rotation found in tags: {rotation}")
+                except (ValueError, TypeError):
+                    pass
+            
+            # 음수 회전 값 처리
             if rotation < 0:
                 rotation += 360
-                
-        except (KeyError, IndexError, ValueError, json.JSONDecodeError) as e:
-            logger.warning(f"ffprobe 출력 파싱 오류: {str(e)}, output: {output}")
-            rotation = 0 # 파싱 실패 시 0 반환
-
-        return rotation
+            
+            # 회전에 따라 width, height 교환
+            logger.info(f"원본 비디오 크기: {width}x{height}, 회전: {rotation}도")
+            if rotation in (90, 270):
+                logger.info("90° 또는 270° 회전 감지 - width/height 교환")
+                width, height = height, width
+            
+            return width, height
+            
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(f"ffprobe 출력 파싱 오류: {str(e)}")
+            return None, None
+        
     except Exception as e:
-        logger.error(f"비디오 회전 정보 확인 중 오류 발생: {str(e)}")
-        return 0 # 그 외 예외 발생 시 0 반환
+        logger.warning(f"비디오 정보 확인 중 오류 발생: {str(e)}")
+        return None, None
     finally:
         # 임시 파일 삭제 및 파일 포인터 복구
         if temp_filename and os.path.exists(temp_filename):
             try:
                 os.unlink(temp_filename)
             except Exception as e:
-                 logger.error(f"임시 파일 삭제 중 오류 발생: {str(e)}")
+                logger.error(f"임시 파일 삭제 중 오류 발생: {str(e)}")
         await file.seek(0)
 
 
