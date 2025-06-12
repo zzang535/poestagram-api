@@ -33,7 +33,16 @@ class FeedResponseWithLike(FeedResponse):
 # 피드 목록 좋아요 응답 스키마
 class FeedListResponseWithLike(BaseModel):
     feeds: List[FeedResponseWithLike]
+    total: int
 
 
 class FeedCreate(FeedBase):
     file_ids: List[int] = []
+
+class FeedForSitemap(BaseModel):
+    id: int
+    user_id: int
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

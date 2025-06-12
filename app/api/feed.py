@@ -19,7 +19,8 @@ from app.schemas.feed import (
     FeedCreate,
     FeedResponse,
     FeedResponseWithLike,
-    FeedListResponseWithLike
+    FeedListResponseWithLike,
+    FeedForSitemap
 )
 from app.schemas.comment import (
     CommentCreate,
@@ -38,6 +39,14 @@ from app.services.s3 import delete_file_from_s3
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+@router.get("/for-sitemap", response_model=List[FeedForSitemap], summary="모든 피드 정보를 사이트맵용으로 조회")
+def get_feeds_for_sitemap(db: Session = Depends(get_db)):
+    """
+    사이트맵 생성을 위해 모든 피드의 ID, 사용자 ID, 마지막 수정일을 반환합니다.
+    """
+    feeds = db.query(Feed.id, Feed.user_id, Feed.updated_at).all()
+    return [{"id": feed.id, "user_id": feed.user_id, "updated_at": feed.updated_at} for feed in feeds]
 
 @router.get("/", response_model=FeedListResponseWithLike)
 def get_all_feeds(
