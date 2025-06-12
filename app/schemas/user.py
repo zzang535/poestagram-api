@@ -73,3 +73,10 @@ class BioUpdateRequest(BaseModel):
 class BioUpdateResponse(BaseModel):
     message: str
     bio: Optional[str] = None
+
+class UserForSitemap(BaseModel):
+    id: int
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

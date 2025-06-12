@@ -21,7 +21,8 @@ from app.schemas.user import (
     UsernameUpdateResponse, 
     BioUpdateRequest, 
     BioUpdateResponse,
-    UserForFeed
+    UserForFeed,
+    UserForSitemap
 )
 
 from app.services.auth import get_current_user_id, get_optional_current_user_id
@@ -34,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+@router.get("/for-sitemap", response_model=List[UserForSitemap], summary="모든 사용자 정보를 사이트맵용으로 조회")
+def get_users_for_sitemap(db: Session = Depends(get_db)):
+    """
+    사이트맵 생성을 위해 모든 사용자의 ID와 마지막 수정일을 반환합니다.
+    """
+    users = db.query(User.id, User.updated_at).all()
+    return [{"id": user.id, "updated_at": user.updated_at} for user in users]
 
 
 @router.get("/{user_id}/feeds", response_model=FeedListResponseWithLike)
@@ -103,7 +112,6 @@ def get_user_feeds(
             profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
         
         # UserForFeed 스키마 생성
-        from app.schemas.user import UserForFeed
         user_data = UserForFeed(
             id=feed.user.id,
             username=feed.user.username,
