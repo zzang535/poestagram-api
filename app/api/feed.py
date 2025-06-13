@@ -63,6 +63,9 @@ def get_all_feeds(
 
     response_feeds = []
 
+    # 전체 피드 수 계산
+    total_feeds = db.query(Feed).count()
+
     # 각 피드의 전체 좋아요 수를 계산하는 서브쿼리
     # 이 서브쿼리는 외부 쿼리의 Feed.id를 참조하므로 상관 서브쿼리(correlated subquery)입니다.
     likes_count_subquery = (
@@ -168,7 +171,7 @@ def get_all_feeds(
             ).model_dump()
             response_feeds.append(FeedResponseWithLike(**dump, is_liked=False))
 
-    return FeedListResponseWithLike(feeds=response_feeds)
+    return FeedListResponseWithLike(feeds=response_feeds, total=total_feeds)
 
 @router.post("/", response_model=FeedResponse, status_code=201)
 def create_feed_endpoint(
