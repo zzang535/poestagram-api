@@ -9,7 +9,6 @@ class File(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     file_name = Column(String(255), nullable=False)
-    base_url = Column(String(255), nullable=False)
     s3_key = Column(String(255), nullable=False)
     s3_key_thumbnail = Column(String(255), nullable=True)  # 썸네일 S3 키 추가
     content_type = Column(String(100), nullable=False)

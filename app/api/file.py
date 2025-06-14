@@ -2,18 +2,28 @@ from fastapi import APIRouter, File as FastAPIFile, UploadFile, HTTPException
 from typing import List
 from app.schemas.file import FileUploadResponse, File
 from app.services.s3 import upload_files_to_s3
-from app.services.media import split_file_url, get_image_dimensions, get_video_dimensions_with_rotation, extract_video_thumbnail
+from app.services.media import get_image_dimensions, get_video_dimensions_with_rotation, extract_video_thumbnail
 from app.models.file import File as FileModel
 from app.db.base import get_db
 from sqlalchemy.orm import Session
 from fastapi import Depends
 import logging
+import os
+from datetime import datetime
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+def extract_s3_key_from_url(url: str) -> str:
+    """S3 URL에서 s3_key를 추출합니다."""
+    # URL 형식: https://bucket-name.s3.region.amazonaws.com/uploads/file.jpg
+    # s3_key 형식: uploads/file.jpg
+    if ".amazonaws.com/" in url:
+        return url.split(".amazonaws.com/", 1)[1]
+    return url
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_files(
@@ -57,7 +67,7 @@ async def upload_files(
                             
                             thumbnail_urls = await upload_files_to_s3([thumbnail])
                             if thumbnail_urls:
-                                _, s3_key_thumbnail = split_file_url(thumbnail_urls[0])
+                                s3_key_thumbnail = extract_s3_key_from_url(thumbnail_urls[0])
                             await thumbnail.close()
                         except Exception as e:
                             logger.error(f"썸네일 업로드 중 오류 발생: {str(e)}")
@@ -81,12 +91,11 @@ async def upload_files(
         # 파일 정보를 DB에 저장
         uploaded_files = []
         for file_url, metadata in zip(file_urls, file_metadata_list):
-            # URL을 base_url과 s3_key로 분리
-            base_url, s3_key = split_file_url(file_url)
+            # URL에서 s3_key만 추출
+            s3_key = extract_s3_key_from_url(file_url)
 
             file_info = FileModel(
                 file_name=metadata['filename'],
-                base_url=base_url,
                 s3_key=s3_key,
                 s3_key_thumbnail=metadata['s3_key_thumbnail'],
                 content_type=metadata['content_type'],

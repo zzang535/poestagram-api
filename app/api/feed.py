@@ -34,6 +34,7 @@ from app.schemas.comment import (
     CommentListResponseWithLike
 )
 from app.services.s3 import delete_file_from_s3
+from app.core.config import settings
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
+                profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -145,7 +146,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
+                profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -241,7 +242,7 @@ def get_single_feed(
     # 프로필 이미지 URL 생성
     profile_image_url = None
     if feed.user.profile_file:
-        profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
+        profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
     
     # UserForFeed 스키마 생성
     user_data = UserForFeed(

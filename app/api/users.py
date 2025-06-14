@@ -27,7 +27,8 @@ from app.schemas.user import (
 
 from app.services.auth import get_current_user_id, get_optional_current_user_id
 from app.services.s3 import upload_files_to_s3, delete_file_from_s3
-from app.services.media import split_file_url, get_image_dimensions
+from app.services.media import get_image_dimensions
+from app.core.config import settings
 
 
 # 로깅 설정
@@ -109,7 +110,7 @@ def get_user_feeds(
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if feed.user.profile_file:
-            profile_image_url = f"{feed.user.profile_file.base_url}/{feed.user.profile_file.s3_key}"
+            profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
         
         # UserForFeed 스키마 생성
         user_data = UserForFeed(
@@ -175,13 +176,18 @@ async def update_profile_image(
         if not file_urls:
             raise HTTPException(status_code=500, detail="파일 업로드에 실패했습니다.")
 
-        # URL을 base_url과 s3_key로 분리
-        base_url, s3_key = split_file_url(file_urls[0])
+        # URL에서 s3_key 추출
+        def extract_s3_key_from_url(url: str) -> str:
+            """S3 URL에서 s3_key를 추출합니다."""
+            if ".amazonaws.com/" in url:
+                return url.split(".amazonaws.com/", 1)[1]
+            return url
+        
+        s3_key = extract_s3_key_from_url(file_urls[0])
 
         # 파일 정보를 DB에 저장
         file_info = FileModel(
             file_name=file.filename,
-            base_url=base_url,
             s3_key=s3_key,
             content_type=file.content_type,
             file_size=file.size,
@@ -218,7 +224,7 @@ async def update_profile_image(
             logger.info(f"사용자 ID {current_user_id}는 기존 프로필 이미지가 없어서 삭제할 파일이 없습니다.")
 
         # 프로필 이미지 URL 생성
-        profile_image_url = f"{base_url}/{s3_key}"
+        profile_image_url = f"{settings.S3_BASE_URL}/{s3_key}"
 
         logger.info(f"프로필 사진 변경 완료: 사용자 ID {current_user_id}, 파일 ID {file_info.id}")
         
@@ -344,8 +350,8 @@ def get_user_profile(
 
     profile_image_url = None
     if user.profile_file:
-        # File 모델의 base_url과 s3_key를 조합하여 완전한 URL 생성
-        profile_image_url = f"{user.profile_file.base_url}/{user.profile_file.s3_key}"
+        # File 모델의 s3_key와 설정된 S3_BASE_URL을 조합하여 완전한 URL 생성
+        profile_image_url = f"{settings.S3_BASE_URL}/{user.profile_file.s3_key}"
 
     return UserProfileResponse(
         id=user.id,

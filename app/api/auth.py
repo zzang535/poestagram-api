@@ -25,6 +25,7 @@ import logging
 from fastapi import status
 from typing import Optional
 import re # 정규표현식 사용을 위해 추가 (더 엄격한 이메일 검증 시)
+from app.core.config import settings
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -184,7 +185,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if user.profile_file:
-            profile_image_url = f"{user.profile_file.base_url}/{user.profile_file.s3_key}"
+            profile_image_url = f"{settings.S3_BASE_URL}/{user.profile_file.s3_key}"
         
         # JWT 토큰 생성
         access_token = create_access_token(

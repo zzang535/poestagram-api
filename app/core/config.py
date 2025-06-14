@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str
     AWS_BUCKET_NAME: str
+    S3_BASE_URL: str
     
     @property
     def DATABASE_URL(self) -> str:
