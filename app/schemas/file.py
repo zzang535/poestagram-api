@@ -15,15 +15,19 @@ class FileBase(BaseModel):
     @computed_field
     @property
     def url(self) -> str:
-        """미디어 Base URL과 s3_key를 조합하여 완전한 URL 생성"""
-        return f"{settings.MEDIA_BASE_URL}/{self.s3_key}"
+        """콘텐츠 타입에 따라 적절한 Base URL과 s3_key를 조합하여 완전한 URL 생성"""
+        if self.content_type and self.content_type.startswith('video/'):
+            return f"{settings.STORAGE_BASE_URL}/{self.s3_key}"
+        else:
+            # 이미지 또는 기타 파일은 IMAGE_BASE_URL 사용
+            return f"{settings.IMAGE_BASE_URL}/{self.s3_key}"
 
     @computed_field
     @property
     def url_thumbnail(self) -> Optional[str]:
-        """썸네일 URL 생성 (s3_key_thumbnail이 있는 경우)"""
+        """썸네일 URL 생성 (s3_key_thumbnail이 있는 경우, 항상 IMAGE_BASE_URL 사용)"""
         if self.s3_key_thumbnail:
-            return f"{settings.MEDIA_BASE_URL}/{self.s3_key_thumbnail}"
+            return f"{settings.IMAGE_BASE_URL}/{self.s3_key_thumbnail}"
         return None
 
 class FileCreate(FileBase):

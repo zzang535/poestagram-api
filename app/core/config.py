@@ -33,7 +33,12 @@ class Settings(BaseSettings):
     AWS_BUCKET_NAME: str
     
     # Media settings
-    MEDIA_BASE_URL: str  # CloudFront or S3 base URL for serving media files
+    IMAGE_BASE_URL: str  # CloudFront URL for images and thumbnails
+    STORAGE_BASE_URL: str  # CloudFront URL for videos
+    
+    def get_profile_image_url(self, s3_key: str) -> str:
+        """프로필 이미지 URL 생성 (항상 IMAGE_BASE_URL 사용)"""
+        return f"{self.IMAGE_BASE_URL}/{s3_key}"
     
     @property
     def DATABASE_URL(self) -> str:
