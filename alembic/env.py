@@ -32,8 +32,13 @@ target_metadata = Base.metadata
 # alembic.ini에 있는 설정 정보를 읽어옴
 config = context.config 
 
-# URL 설정을 여기서 덮어씁니다
-config.set_main_option("sqlalchemy.url", get_url())
+# CLI 인자에서 db_url 받아오기
+cli_db_url = context.get_x_argument(as_dictionary=True).get("db_url")
+if cli_db_url:
+    config.set_main_option("sqlalchemy.url", cli_db_url)
+else:
+    config.set_main_option("sqlalchemy.url", get_url())
+
 
 # 로그 설정을 초기화 (fileConfig는 Python의 기본 로깅 설정)
 if config.config_file_name is not None: 
