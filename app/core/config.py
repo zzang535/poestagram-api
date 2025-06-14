@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str
     AWS_BUCKET_NAME: str
-    S3_BASE_URL: str
+    
+    # Media settings
+    MEDIA_BASE_URL: str  # CloudFront or S3 base URL for serving media files
     
     @property
     def DATABASE_URL(self) -> str:

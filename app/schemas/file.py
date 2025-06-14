@@ -15,15 +15,15 @@ class FileBase(BaseModel):
     @computed_field
     @property
     def url(self) -> str:
-        """S3 Base URL과 s3_key를 조합하여 완전한 URL 생성"""
-        return f"{settings.S3_BASE_URL}/{self.s3_key}"
+        """미디어 Base URL과 s3_key를 조합하여 완전한 URL 생성"""
+        return f"{settings.MEDIA_BASE_URL}/{self.s3_key}"
 
     @computed_field
     @property
     def url_thumbnail(self) -> Optional[str]:
         """썸네일 URL 생성 (s3_key_thumbnail이 있는 경우)"""
         if self.s3_key_thumbnail:
-            return f"{settings.S3_BASE_URL}/{self.s3_key_thumbnail}"
+            return f"{settings.MEDIA_BASE_URL}/{self.s3_key_thumbnail}"
         return None
 
 class FileCreate(FileBase):

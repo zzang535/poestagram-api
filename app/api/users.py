@@ -110,7 +110,7 @@ def get_user_feeds(
         # 프로필 이미지 URL 생성
         profile_image_url = None
         if feed.user.profile_file:
-            profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
+            profile_image_url = f"{settings.MEDIA_BASE_URL}/{feed.user.profile_file.s3_key}"
         
         # UserForFeed 스키마 생성
         user_data = UserForFeed(
@@ -224,7 +224,7 @@ async def update_profile_image(
             logger.info(f"사용자 ID {current_user_id}는 기존 프로필 이미지가 없어서 삭제할 파일이 없습니다.")
 
         # 프로필 이미지 URL 생성
-        profile_image_url = f"{settings.S3_BASE_URL}/{s3_key}"
+        profile_image_url = f"{settings.MEDIA_BASE_URL}/{s3_key}"
 
         logger.info(f"프로필 사진 변경 완료: 사용자 ID {current_user_id}, 파일 ID {file_info.id}")
         
@@ -350,8 +350,8 @@ def get_user_profile(
 
     profile_image_url = None
     if user.profile_file:
-        # File 모델의 s3_key와 설정된 S3_BASE_URL을 조합하여 완전한 URL 생성
-        profile_image_url = f"{settings.S3_BASE_URL}/{user.profile_file.s3_key}"
+        # File 모델의 s3_key와 설정된 MEDIA_BASE_URL을 조합하여 완전한 URL 생성
+        profile_image_url = f"{settings.MEDIA_BASE_URL}/{user.profile_file.s3_key}"
 
     return UserProfileResponse(
         id=user.id,

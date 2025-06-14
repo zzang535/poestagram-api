@@ -103,7 +103,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
+                profile_image_url = f"{settings.MEDIA_BASE_URL}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -146,7 +146,7 @@ def get_all_feeds(
             # 프로필 이미지 URL 생성
             profile_image_url = None
             if feed.user.profile_file:
-                profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
+                profile_image_url = f"{settings.MEDIA_BASE_URL}/{feed.user.profile_file.s3_key}"
             
             user = UserSchemaForFeed(
                 id=feed.user.id,
@@ -242,7 +242,7 @@ def get_single_feed(
     # 프로필 이미지 URL 생성
     profile_image_url = None
     if feed.user.profile_file:
-        profile_image_url = f"{settings.S3_BASE_URL}/{feed.user.profile_file.s3_key}"
+        profile_image_url = f"{settings.MEDIA_BASE_URL}/{feed.user.profile_file.s3_key}"
     
     # UserForFeed 스키마 생성
     user_data = UserForFeed(
